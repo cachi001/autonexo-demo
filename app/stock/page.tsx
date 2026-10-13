@@ -60,6 +60,8 @@ export default function StockPage() {
   const [stock, setStock] = useState<Vehiculo[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [cedulaStatus, setCedulaStatus] = useState("");
+  const [cedulaPreview, setCedulaPreview] = useState<string | null>(null);
+  const [procesandoCedula, setProcesandoCedula] = useState(false);
   const [formCedula, setFormCedula] = useState<Record<string, string> | null>(null);
   const [chasisDetectado, setChasisDetectado] = useState<string | null>(null);
   const [csvPreview, setCsvPreview] = useState<{ filas: FilaValidada[]; total: number; validas: number; con_error: number } | null>(null);
@@ -78,11 +80,19 @@ export default function StockPage() {
   }
   useEffect(() => { cargarStock(); cargarLeads(); }, []);
 
+  function seleccionarFotoCedula(file: File) {
+    setFormCedula(null);
+    setCedulaPreview(URL.createObjectURL(file));
+    procesarCedula();
+  }
+
   async function procesarCedula() {
-    setCedulaStatus("Procesando foto...");
+    setProcesandoCedula(true);
+    setCedulaStatus("Detectando documento y leyendo campos con OCR...");
     setFormCedula(null);
     const res = await fetch("/api/stock/cargar-por-cedula", { method: "POST" });
     const data = await res.json();
+    setProcesandoCedula(false);
     setCedulaStatus("");
     setFormCedula(data.fila.datos);
     setChasisDetectado(data.chasis_detectado);
@@ -101,6 +111,7 @@ export default function StockPage() {
     const data = await res.json();
     setCedulaStatus(`${data.cantidad} vehículo(s) agregado(s).`);
     setFormCedula(null);
+    setCedulaPreview(null);
     cargarStock();
   }
 
@@ -223,13 +234,26 @@ export default function StockPage() {
                 <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">simulado en esta demo</span>
               </div>
               <p className="mb-3 text-sm text-zinc-500 sm:ml-9">
-                En el prototipo local corre PaddleOCR de verdad contra la foto. Acá, como Vercel no puede correr ese modelo, se reproduce un resultado real ya obtenido antes — el formato de los campos es el mismo.
+                Subí la foto y se simula la detección + lectura OCR. En el prototipo local corre PaddleOCR de verdad contra la imagen; acá, como Vercel no puede correr ese modelo pesado, el resultado que se muestra es uno real ya obtenido antes con el prototipo — el formato de los campos es el mismo.
               </p>
-              <div className="flex flex-wrap items-center gap-3 sm:ml-9">
-                <button onClick={procesarCedula} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-200 hover:bg-blue-700">
-                  Simular foto de cédula
-                </button>
-                <span className="text-sm text-zinc-500">{cedulaStatus}</span>
+              <div className="flex flex-wrap items-center gap-4 sm:ml-9">
+                <label className="cursor-pointer rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-200 hover:bg-blue-700">
+                  📷 Subir foto de cédula
+                  <input
+                    type="file" accept="image/*" className="hidden"
+                    onChange={(e) => e.target.files?.[0] && seleccionarFotoCedula(e.target.files[0])}
+                  />
+                </label>
+                {cedulaPreview && (
+                  <img src={cedulaPreview} alt="Foto de cédula subida" className="h-14 w-20 rounded-md border border-zinc-200 object-cover" />
+                )}
+                {procesandoCedula && (
+                  <span className="flex items-center gap-2 text-sm text-blue-700">
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+                    {cedulaStatus}
+                  </span>
+                )}
+                {!procesandoCedula && cedulaStatus && <span className="text-sm text-zinc-500">{cedulaStatus}</span>}
               </div>
               {formCedula && (
                 <div className="mt-4 rounded-lg bg-blue-50/60 p-4 sm:ml-9">
