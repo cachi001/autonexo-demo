@@ -76,7 +76,7 @@ export default function CatalogoPage() {
           <input
             value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscá por marca, modelo o dominio…"
-            className="w-full max-w-md rounded-lg border-0 px-4 py-2.5 text-sm text-zinc-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-white"
+            className="w-full max-w-md rounded-lg border-0 bg-white px-4 py-2.5 text-sm text-zinc-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-white"
           />
         </div>
       </section>
@@ -133,13 +133,13 @@ export default function CatalogoPage() {
               ) : (
                 <div>
                   <label className="mb-2 block text-xs font-semibold">Tu nombre
-                    <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm" />
+                    <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" />
                   </label>
                   <label className="mb-2 block text-xs font-semibold">Teléfono (opcional)
-                    <input value={telefono} onChange={(e) => setTelefono(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm" />
+                    <input value={telefono} onChange={(e) => setTelefono(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" />
                   </label>
                   <label className="mb-3 block text-xs font-semibold">Tu consulta
-                    <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Ej: ¿Está disponible? ¿Acepta permuta?" className="mt-1 min-h-[70px] w-full rounded-md border border-zinc-300 px-3 py-2 text-sm" />
+                    <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Ej: ¿Está disponible? ¿Acepta permuta?" className="mt-1 min-h-[70px] w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" />
                   </label>
                   <button onClick={enviarConsulta} disabled={enviando} className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
                     {enviando ? "Enviando…" : "Enviar consulta a la agencia"}

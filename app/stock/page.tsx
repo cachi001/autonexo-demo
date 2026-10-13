@@ -214,7 +214,7 @@ export default function StockPage() {
                       <input
                         value={formCedula[campo] || ""}
                         onChange={(e) => setFormCedula({ ...formCedula, [campo]: e.target.value })}
-                        className="mt-1 block w-36 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                        className="mt-1 block w-36 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
                       />
                     </label>
                   ))}
