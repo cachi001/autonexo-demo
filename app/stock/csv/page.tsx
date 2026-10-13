@@ -7,7 +7,7 @@ import { Upload, Download, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 type FilaValidada = { numero_fila: number; datos: Record<string, string>; errores: string[]; valida: boolean };
 
-const COLUMNAS = ["dominio", "marca", "modelo", "anio", "tipo", "precio", "km", "color", "descripcion"];
+const COLUMNAS = ["Dominio", "Marca", "Modelo", "Año", "Tipo", "Precio", "Km", "Color", "Descripción"];
 
 export default function CargarPorCsvPage() {
   const router = useRouter();

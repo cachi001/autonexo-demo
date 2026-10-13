@@ -2,10 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { validarFila, COLUMNAS_OBLIGATORIAS } from "@/lib/data";
 import * as XLSX from "xlsx";
 
+// Los campos internos ("anio", "descripcion") van sin tilde/ñ para no
+// depender de que el archivo venga bien codificado — pero a un humano hay
+// que mostrarle/dejarle escribir "Año" y "Descripción" en la planilla, así
+// que acá se sacan los acentos del encabezado antes de comparar.
+function normalizarHeader(h: string): string {
+  const sinBom = h.trim().toLowerCase().replace(/^﻿/, "");
+  const sinAcentos = sinBom.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  // "año" sin tilde queda "ano" (3 letras), pero el campo interno es "anio"
+  // (4 letras, para no depender de la ñ) — caso especial, no es solo sacar
+  // el acento.
+  return sinAcentos === "ano" ? "anio" : sinAcentos;
+}
+
 function parseCsv(texto: string): Record<string, string>[] {
   const lineas = texto.replace(/\r\n/g, "\n").split("\n").filter((l) => l.trim());
   if (lineas.length === 0) return [];
-  const headers = lineas[0].split(",").map((h) => h.trim().toLowerCase().replace(/^﻿/, ""));
+  const headers = lineas[0].split(",").map(normalizarHeader);
   return lineas.slice(1).map((linea) => {
     const valores = linea.split(",");
     const fila: Record<string, string> = {};
@@ -21,7 +34,7 @@ function parseExcel(buffer: ArrayBuffer): Record<string, string>[] {
   return filas.map((fila) => {
     const normalizada: Record<string, string> = {};
     for (const [k, v] of Object.entries(fila)) {
-      normalizada[k.trim().toLowerCase()] = String(v ?? "").trim();
+      normalizada[normalizarHeader(k)] = String(v ?? "").trim();
     }
     return normalizada;
   });

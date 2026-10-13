@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
-const COLUMNAS = ["dominio", "marca", "modelo", "anio", "tipo", "precio", "km", "color", "descripcion"];
+const COLUMNAS = ["Dominio", "Marca", "Modelo", "Año", "Tipo", "Precio", "Km", "Color", "Descripción"];
 const FILA_EJEMPLO = ["AB123CD", "VOLKSWAGEN", "GOL TREND", "2019", "SEDAN", "8500000", "65000", "BLANCO", "Único dueño"];
 
 export async function GET() {
