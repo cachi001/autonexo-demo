@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Proxy server-side hacia el backend Python real (OpenCV + PaddleOCR),
+// Proxy server-side hacia el backend Python real (OpenCV + RapidOCR),
 // desplegado aparte en Render porque ese modelo no entra en una función
 // serverless de Vercel (pesa cientos de MB). Vercel solo reenvía el archivo;
 // el OCR corre de verdad en el otro servicio.

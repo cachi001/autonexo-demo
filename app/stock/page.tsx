@@ -288,10 +288,10 @@ export default function StockPage() {
                   <Camera className="h-4 w-4" strokeWidth={2} />
                 </span>
                 <h2 className="text-sm font-semibold">Cargar 1 vehículo por foto de cédula</h2>
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">OCR real (OpenCV + PaddleOCR)</span>
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">OCR real (OpenCV + RapidOCR)</span>
               </div>
               <p className="mb-3 text-sm text-zinc-500 sm:ml-9">
-                Subí el frente de la cédula verde (obligatorio) y el dorso (opcional, para el titular). El backend —desplegado aparte en Render porque el modelo no entra en una función serverless de Vercel— corre de verdad OpenCV para detectar y enderezar el documento, y PaddleOCR para leer el texto. Si no se usó en los últimos minutos, la primera foto puede tardar hasta un minuto en procesar mientras el servidor despierta.
+                Subí el frente de la cédula verde (obligatorio) y el dorso (opcional, para el titular). El backend —desplegado aparte en Render porque este modelo no entra en una función serverless de Vercel— corre de verdad OpenCV para detectar y enderezar el documento, y RapidOCR (los mismos pesos de modelo PP-OCR, corridos vía ONNX Runtime para entrar en el plan gratuito) para leer el texto. Como el servidor está en el plan free, cada foto puede tardar alrededor de un minuto en procesar.
               </p>
 
               <div className="grid grid-cols-1 gap-3 sm:ml-9 sm:max-w-md sm:grid-cols-2">
