@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Camera, CheckCircle2, X } from "lucide-react";
 
 type Vehiculo = {
   dominio: string; marca: string; modelo: string; anio: string; tipo: string;
@@ -92,11 +93,11 @@ export default function CatalogoPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtrados.map((v) => (
             <button key={v.dominio} onClick={() => abrirFicha(v)} className="overflow-hidden rounded-xl border border-zinc-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-2 hover:ring-blue-200">
-              <div className={`relative flex h-32 items-center justify-center bg-gradient-to-br text-xs text-zinc-500 sm:h-36 ${accentFicha(v)}`}>
-                📷 foto próximamente
+              <div className={`relative flex h-32 items-center justify-center gap-1.5 bg-gradient-to-br text-xs text-zinc-500 sm:h-36 ${accentFicha(v)}`}>
+                <Camera className="h-4 w-4" strokeWidth={1.75} /> foto próximamente
                 {v.documentacion_validada && (
                   <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm">
-                    ✓ Papeles OK
+                    <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} /> Papeles OK
                   </span>
                 )}
               </div>
@@ -119,9 +120,9 @@ export default function CatalogoPage() {
       {abierto && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 p-3 sm:p-5" onClick={() => setAbierto(null)}>
           <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className={`relative flex h-36 items-center justify-center bg-gradient-to-br text-sm text-zinc-500 sm:h-40 ${accentFicha(abierto)}`}>
-              📷 foto próximamente
-              <button onClick={() => setAbierto(null)} className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-sm shadow">✕</button>
+            <div className={`relative flex h-36 items-center justify-center gap-1.5 bg-gradient-to-br text-sm text-zinc-500 sm:h-40 ${accentFicha(abierto)}`}>
+              <Camera className="h-4 w-4" strokeWidth={1.75} /> foto próximamente
+              <button onClick={() => setAbierto(null)} className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 shadow"><X className="h-4 w-4" strokeWidth={2} /></button>
             </div>
             <div className="p-5 sm:p-6">
               <h2 className="text-lg font-bold">{abierto.marca} {abierto.modelo}</h2>
@@ -133,8 +134,9 @@ export default function CatalogoPage() {
               {abierto.descripcion && <p className="mb-3 text-sm text-zinc-600">{abierto.descripcion}</p>}
 
               {confirmado ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-relaxed text-emerald-700">
-                  ✓ Tu consulta fue enviada a la agencia. Todavía no está confirmada ni respondida — un vendedor la va a revisar y te va a contactar directamente. Autoclick no vende el auto ni confirma nada en tu nombre.
+                <div className="flex gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-relaxed text-emerald-700">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+                  <span>Tu consulta fue enviada a la agencia. Todavía no está confirmada ni respondida — un vendedor la va a revisar y te va a contactar directamente. Autoclick no vende el auto ni confirma nada en tu nombre.</span>
                 </div>
               ) : (
                 <div>

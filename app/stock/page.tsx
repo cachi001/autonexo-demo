@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  LayoutDashboard, Camera, FileText, Car, MessageCircle, ShoppingCart,
+  Menu, Eye, CheckCircle2, Loader2, Upload,
+} from "lucide-react";
 
 type Vehiculo = {
   dominio: string; marca: string; modelo: string; anio: string; tipo: string;
@@ -18,11 +22,11 @@ const CAMPO_LABELS: Record<string, string> = {
 };
 
 const NAV = [
-  { href: "#resumen", icon: "📊", label: "Resumen" },
-  { href: "#cedula", icon: "📷", label: "Cargar por cédula" },
-  { href: "#csv", icon: "📄", label: "Cargar por planilla" },
-  { href: "#stock", icon: "🚗", label: "Stock" },
-  { href: "#consultas", icon: "💬", label: "Consultas" },
+  { href: "#resumen", Icon: LayoutDashboard, label: "Resumen" },
+  { href: "#cedula", Icon: Camera, label: "Cargar por cédula" },
+  { href: "#csv", Icon: FileText, label: "Cargar por planilla" },
+  { href: "#stock", Icon: Car, label: "Stock" },
+  { href: "#consultas", Icon: MessageCircle, label: "Consultas" },
 ];
 
 function formatoPrecio(p: string) {
@@ -43,13 +47,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <nav className="flex-1 space-y-1 px-3 py-4">
         {NAV.map((item) => (
           <a key={item.href} href={item.href} onClick={onNavigate} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-blue-100 transition hover:bg-white/10 hover:text-white">
-            <span className="text-base">{item.icon}</span>{item.label}
+            <item.Icon className="h-4 w-4" strokeWidth={2} />{item.label}
           </a>
         ))}
       </nav>
       <div className="border-t border-white/10 p-3">
         <Link href="/catalogo" className="flex items-center justify-center gap-2 rounded-lg bg-white/10 px-3 py-2.5 text-sm font-semibold text-white hover:bg-white/20">
-          🛒 Ver como comprador
+          <ShoppingCart className="h-4 w-4" strokeWidth={2} /> Ver como comprador
         </Link>
       </div>
     </>
@@ -187,8 +191,8 @@ export default function StockPage() {
         <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <button onClick={() => setMenuAbierto(true)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-lg lg:hidden" aria-label="Abrir menú">
-                ☰
+              <button onClick={() => setMenuAbierto(true)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 lg:hidden" aria-label="Abrir menú">
+                <Menu className="h-5 w-5" strokeWidth={2} />
               </button>
               <div>
                 <h1 className="text-base font-semibold tracking-tight">Panel de agencia</h1>
@@ -205,22 +209,22 @@ export default function StockPage() {
           {/* Stat cards */}
           <section id="resumen" className="grid scroll-mt-20 grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 p-4 text-white shadow-lg shadow-blue-200">
-              <span className="absolute -right-2 -top-2 text-5xl opacity-20">🚗</span>
+              <Car className="absolute -right-2 -top-2 h-16 w-16 opacity-20" strokeWidth={1.5} />
               <div className="relative text-[11px] font-medium uppercase tracking-wide text-blue-100">En stock</div>
               <div className="relative mt-1 text-3xl font-bold">{stock.length}</div>
             </div>
             <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 p-4 text-white shadow-lg shadow-violet-200">
-              <span className="absolute -right-2 -top-2 text-5xl opacity-20">👁</span>
+              <Eye className="absolute -right-2 -top-2 h-16 w-16 opacity-20" strokeWidth={1.5} />
               <div className="relative text-[11px] font-medium uppercase tracking-wide text-violet-100">Vistas totales</div>
               <div className="relative mt-1 text-3xl font-bold">{totalVistas}</div>
             </div>
             <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 p-4 text-white shadow-lg shadow-amber-200">
-              <span className="absolute -right-2 -top-2 text-5xl opacity-20">💬</span>
+              <MessageCircle className="absolute -right-2 -top-2 h-16 w-16 opacity-20" strokeWidth={1.5} />
               <div className="relative text-[11px] font-medium uppercase tracking-wide text-amber-100">Consultas pendientes</div>
               <div className="relative mt-1 text-3xl font-bold">{pendientes}</div>
             </div>
             <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 p-4 text-white shadow-lg shadow-emerald-200">
-              <span className="absolute -right-2 -top-2 text-5xl opacity-20">✓</span>
+              <CheckCircle2 className="absolute -right-2 -top-2 h-16 w-16 opacity-20" strokeWidth={1.5} />
               <div className="relative text-[11px] font-medium uppercase tracking-wide text-emerald-100">Papeles validados</div>
               <div className="relative mt-1 text-3xl font-bold">{validados}/{stock.length}</div>
             </div>
@@ -229,7 +233,9 @@ export default function StockPage() {
           <section id="cedula" className="scroll-mt-20 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
             <div className="p-4 sm:p-5">
               <div className="mb-1 flex flex-wrap items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-sm shadow-sm shadow-blue-200">📷</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-sm shadow-blue-200">
+                  <Camera className="h-4 w-4" strokeWidth={2} />
+                </span>
                 <h2 className="text-sm font-semibold">Cargar 1 vehículo por foto de cédula</h2>
                 <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">simulado en esta demo</span>
               </div>
@@ -237,8 +243,8 @@ export default function StockPage() {
                 Subí la foto y se simula la detección + lectura OCR. En el prototipo local corre PaddleOCR de verdad contra la imagen; acá, como Vercel no puede correr ese modelo pesado, el resultado que se muestra es uno real ya obtenido antes con el prototipo — el formato de los campos es el mismo.
               </p>
               <div className="flex flex-wrap items-center gap-4 sm:ml-9">
-                <label className="cursor-pointer rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-200 hover:bg-blue-700">
-                  📷 Subir foto de cédula
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-200 hover:bg-blue-700">
+                  <Upload className="h-4 w-4" strokeWidth={2} /> Subir foto de cédula
                   <input
                     type="file" accept="image/*" className="hidden"
                     onChange={(e) => e.target.files?.[0] && seleccionarFotoCedula(e.target.files[0])}
@@ -249,7 +255,7 @@ export default function StockPage() {
                 )}
                 {procesandoCedula && (
                   <span className="flex items-center gap-2 text-sm text-blue-700">
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
                     {cedulaStatus}
                   </span>
                 )}
@@ -283,7 +289,9 @@ export default function StockPage() {
           <section id="csv" className="scroll-mt-20 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
             <div className="p-4 sm:p-5">
               <div className="mb-1 flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 text-sm shadow-sm shadow-violet-200">📄</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-sm shadow-violet-200">
+                  <FileText className="h-4 w-4" strokeWidth={2} />
+                </span>
                 <h2 className="text-sm font-semibold">Cargar stock por planilla (CSV)</h2>
               </div>
               <div className="flex flex-wrap items-center gap-3 sm:ml-9">
@@ -327,18 +335,20 @@ export default function StockPage() {
           <section id="stock" className="scroll-mt-20 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
             <div className="p-4 sm:p-5">
               <div className="mb-3 flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-sm shadow-sm shadow-emerald-200">🚗</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm shadow-emerald-200">
+                  <Car className="h-4 w-4" strokeWidth={2} />
+                </span>
                 <h2 className="text-sm font-semibold">Stock actual</h2>
                 <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">{stock.length} vehículo(s)</span>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:ml-9 sm:grid-cols-2 md:grid-cols-3">
                 {stock.map((v) => (
                   <div key={v.dominio} className="overflow-hidden rounded-xl border border-zinc-200 transition hover:-translate-y-0.5 hover:shadow-md">
-                    <div className="relative flex h-24 items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-50 text-xs text-zinc-400">
-                      📷 (próximamente)
+                    <div className="relative flex h-24 items-center justify-center gap-1.5 bg-gradient-to-br from-emerald-50 to-teal-50 text-xs text-zinc-400">
+                      <Camera className="h-4 w-4" strokeWidth={1.75} /> (próximamente)
                       {v.documentacion_validada && (
                         <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                          ✓ Papeles OK
+                          <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} /> Papeles OK
                         </span>
                       )}
                     </div>
@@ -346,12 +356,15 @@ export default function StockPage() {
                       <div className="font-mono text-[11px] text-zinc-400">{v.dominio}</div>
                       <div className="text-sm font-semibold">{v.marca} {v.modelo}</div>
                       <div className="text-sm font-bold text-emerald-700">{formatoPrecio(v.precio)}</div>
-                      <div className="mt-1 text-[10px] text-zinc-500">👁 {v.vistas_reales} vistas · 💬 {v.consultas_reales} consultas</div>
+                      <div className="mt-1 flex items-center gap-2 text-[10px] text-zinc-500">
+                        <span className="flex items-center gap-1"><Eye className="h-3 w-3" strokeWidth={2} /> {v.vistas_reales} vistas</span>
+                        <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" strokeWidth={2} /> {v.consultas_reales} consultas</span>
+                      </div>
                       <button
                         onClick={() => toggleDocumentacion(v.dominio, !v.documentacion_validada)}
-                        className={`mt-2 w-full rounded-md border px-2 py-1.5 text-[11px] ${v.documentacion_validada ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"}`}
+                        className={`mt-2 flex w-full items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-[11px] ${v.documentacion_validada ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"}`}
                       >
-                        {v.documentacion_validada ? "✓ Papeles validados — quitar" : "Marcar papeles como validados"}
+                        {v.documentacion_validada ? (<><CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} /> Papeles validados — quitar</>) : "Marcar papeles como validados"}
                       </button>
                     </div>
                   </div>
@@ -364,7 +377,9 @@ export default function StockPage() {
           <section id="consultas" className="scroll-mt-20 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
             <div className="p-4 sm:p-5">
               <div className="mb-1 flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-sm shadow-sm shadow-amber-200">💬</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-sm shadow-amber-200">
+                  <MessageCircle className="h-4 w-4" strokeWidth={2} />
+                </span>
                 <h2 className="text-sm font-semibold">Consultas de compradores</h2>
                 <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">{leads.length} consulta(s)</span>
               </div>
