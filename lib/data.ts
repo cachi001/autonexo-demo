@@ -17,6 +17,13 @@ export type Vehiculo = {
   km: string;
   color: string;
   descripcion: string;
+  // Chasis y datos del titular vienen de la cédula pero el OCR no siempre
+  // los lee bien (ej. DNI tapado/parcial) -> la agencia tiene que poder
+  // escribirlos o corregirlos a mano, así que se guardan como el resto.
+  chasis: string;
+  titular_nombre: string;
+  titular_domicilio: string;
+  titular_dni: string;
   documentacion_validada: boolean;
   documentacion_validada_fecha: string | null;
   vistas_reales: number;
@@ -44,6 +51,10 @@ const SEED_STOCK: Vehiculo[] = [
     km: "65000",
     color: "BLANCO",
     descripcion: "Único dueño, service oficial",
+    chasis: "",
+    titular_nombre: "",
+    titular_domicilio: "",
+    titular_dni: "",
     documentacion_validada: true,
     documentacion_validada_fecha: "2026-10-12",
     vistas_reales: 3,
@@ -59,6 +70,10 @@ const SEED_STOCK: Vehiculo[] = [
     km: "80000",
     color: "GRIS",
     descripcion: "Buen estado",
+    chasis: "",
+    titular_nombre: "",
+    titular_domicilio: "",
+    titular_dni: "",
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
@@ -74,6 +89,10 @@ const SEED_STOCK: Vehiculo[] = [
     km: "12000",
     color: "ROJA",
     descripcion: "Cargada por foto de cédula real — dato de prueba de esta sesión",
+    chasis: "",
+    titular_nombre: "",
+    titular_domicilio: "",
+    titular_dni: "",
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
@@ -99,12 +118,23 @@ function asegurarTablas(): Promise<void> {
           km TEXT NOT NULL DEFAULT '',
           color TEXT NOT NULL DEFAULT '',
           descripcion TEXT NOT NULL DEFAULT '',
+          chasis TEXT NOT NULL DEFAULT '',
+          titular_nombre TEXT NOT NULL DEFAULT '',
+          titular_domicilio TEXT NOT NULL DEFAULT '',
+          titular_dni TEXT NOT NULL DEFAULT '',
           documentacion_validada BOOLEAN NOT NULL DEFAULT FALSE,
           documentacion_validada_fecha TEXT,
           vistas_reales INTEGER NOT NULL DEFAULT 0,
           fotos JSONB NOT NULL DEFAULT '[]'::jsonb
         )
       `;
+      // La tabla stock ya existe en producción desde antes de agregar estas
+      // columnas -> CREATE TABLE IF NOT EXISTS no las agrega a una tabla ya
+      // creada, hace falta ALTER TABLE explícito.
+      await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS chasis TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_nombre TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_domicilio TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_dni TEXT NOT NULL DEFAULT ''`;
       await sql`
         CREATE TABLE IF NOT EXISTS leads (
           id TEXT PRIMARY KEY,
@@ -120,8 +150,8 @@ function asegurarTablas(): Promise<void> {
       if (count === 0) {
         for (const v of SEED_STOCK) {
           await sql`
-            INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
-            VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.documentacion_validada}, ${v.documentacion_validada_fecha}, ${v.vistas_reales}, ${JSON.stringify(v.fotos)})
+            INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
+            VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.documentacion_validada}, ${v.documentacion_validada_fecha}, ${v.vistas_reales}, ${JSON.stringify(v.fotos)})
           `;
         }
       }
@@ -141,6 +171,10 @@ function filaAVehiculo(r: Record<string, unknown>): Vehiculo {
     km: r.km as string,
     color: r.color as string,
     descripcion: r.descripcion as string,
+    chasis: (r.chasis as string) || "",
+    titular_nombre: (r.titular_nombre as string) || "",
+    titular_domicilio: (r.titular_domicilio as string) || "",
+    titular_dni: (r.titular_dni as string) || "",
     documentacion_validada: r.documentacion_validada as boolean,
     documentacion_validada_fecha: r.documentacion_validada_fecha as string | null,
     vistas_reales: r.vistas_reales as number,
@@ -179,8 +213,8 @@ export async function agregarVehiculo(
   const existente = await sql`SELECT dominio FROM stock WHERE dominio = ${v.dominio}`;
   if (existente.length > 0) return null;
   await sql`
-    INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
-    VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, FALSE, NULL, 0, '[]'::jsonb)
+    INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
+    VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, FALSE, NULL, 0, '[]'::jsonb)
   `;
   return {
     ...v,

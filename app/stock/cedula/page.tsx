@@ -79,7 +79,7 @@ export default function CargarPorCedulaPage() {
 
   const [formCedula, setFormCedula] = useState<Record<string, string> | null>(null);
   const [chasisDetectado, setChasisDetectado] = useState<string | null>(null);
-  const [titular, setTitular] = useState<Titular | null>(null);
+  const [titular, setTitular] = useState<Titular>({ nombre: "", domicilio: "", dni: "" });
   const [advertencias, setAdvertencias] = useState<string[]>([]);
   const [diagnostico, setDiagnostico] = useState<DiagnosticoCedula | null>(null);
   const [completar, setCompletar] = useState<Record<string, string>>({ anio: "", tipo: "", precio: "", km: "", color: "", descripcion: "" });
@@ -119,7 +119,7 @@ export default function CargarPorCedulaPage() {
       if (data.error) { setError(data.error); setPaso("dorso"); return; }
       setFormCedula(data.fila.datos);
       setChasisDetectado(data.chasis_detectado);
-      setTitular(data.titular || null);
+      setTitular(data.titular || { nombre: "", domicilio: "", dni: "" });
       setAdvertencias(data.advertencias || []);
       setDiagnostico(data.diagnostico || null);
       setPaso("resultado");
@@ -132,7 +132,14 @@ export default function CargarPorCedulaPage() {
 
   async function confirmar() {
     if (!formCedula) return;
-    const datosFinales = { ...formCedula, ...completar };
+    const datosFinales: Record<string, string> = {
+      ...formCedula,
+      ...completar,
+      chasis: chasisDetectado || "",
+      titular_nombre: titular?.nombre || "",
+      titular_domicilio: titular?.domicilio || "",
+      titular_dni: titular?.dni || "",
+    };
     const obligatorios = ["dominio", "marca", "modelo", "anio", "precio"];
     const faltan = obligatorios.filter((c) => !datosFinales[c]);
     if (faltan.length) { setError(`Faltan campos obligatorios: ${faltan.join(", ")}`); return; }
@@ -292,31 +299,50 @@ export default function CargarPorCedulaPage() {
                   </label>
                 ))}
               </div>
-              <div className="mt-3 text-xs text-zinc-600">
-                Chasis: <code className="rounded bg-blue-100 px-1.5 py-0.5">{chasisDetectado || "no leído"}</code>
-              </div>
+              <label className="mt-3 block text-xs font-semibold text-zinc-600">
+                Chasis
+                <input
+                  value={chasisDetectado || ""}
+                  onChange={(e) => setChasisDetectado(e.target.value)}
+                  placeholder="No se leyó — completalo a mano"
+                  className="mt-1 block w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400"
+                />
+              </label>
 
-              {titular && (
-                <div className="mt-4 border-t border-blue-200 pt-4">
-                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-blue-800">
-                    <User className="h-3.5 w-3.5" strokeWidth={2} /> Titular registral (del dorso)
-                  </div>
+              <div className="mt-4 border-t border-blue-200 pt-4">
+                <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-blue-800">
+                  <User className="h-3.5 w-3.5" strokeWidth={2} /> Titular registral (del dorso) — revisá y corregí si el OCR no leyó bien
+                </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <div className="rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm">
-                      <div className="text-[10px] uppercase text-zinc-400">Nombre</div>
-                      {titular.nombre || <span className="text-zinc-400">— no leído —</span>}
-                    </div>
-                    <div className="rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm">
-                      <div className="text-[10px] uppercase text-zinc-400">Domicilio</div>
-                      {titular.domicilio || <span className="text-zinc-400">— no leído —</span>}
-                    </div>
-                    <div className="rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm">
-                      <div className="text-[10px] uppercase text-zinc-400">DNI</div>
-                      {titular.dni || <span className="text-zinc-400">— no leído —</span>}
-                    </div>
+                    <label className="text-xs font-semibold text-zinc-600">
+                      Nombre
+                      <input
+                        value={titular.nombre || ""}
+                        onChange={(e) => setTitular({ ...titular, nombre: e.target.value })}
+                        placeholder="No se leyó — completalo a mano"
+                        className="mt-1 block w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400"
+                      />
+                    </label>
+                    <label className="text-xs font-semibold text-zinc-600">
+                      Domicilio
+                      <input
+                        value={titular.domicilio || ""}
+                        onChange={(e) => setTitular({ ...titular, domicilio: e.target.value })}
+                        placeholder="No se leyó — completalo a mano"
+                        className="mt-1 block w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400"
+                      />
+                    </label>
+                    <label className="text-xs font-semibold text-zinc-600">
+                      DNI
+                      <input
+                        value={titular.dni || ""}
+                        onChange={(e) => setTitular({ ...titular, dni: e.target.value })}
+                        placeholder="No se leyó — completalo a mano"
+                        className="mt-1 block w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400"
+                      />
+                    </label>
                   </div>
                 </div>
-              )}
             </div>
 
             {/* Lo que completa la agencia — secundario, va después */}

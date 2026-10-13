@@ -16,6 +16,10 @@ export async function POST(req: NextRequest) {
       km: f.datos.km || "",
       color: f.datos.color || "",
       descripcion: f.datos.descripcion || "",
+      chasis: f.datos.chasis || "",
+      titular_nombre: f.datos.titular_nombre || "",
+      titular_domicilio: f.datos.titular_domicilio || "",
+      titular_dni: f.datos.titular_dni || "",
     });
     if (v) agregados.push(v);
   }
