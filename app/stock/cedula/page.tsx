@@ -126,7 +126,7 @@ export default function CargarPorCedulaPage() {
     const data = await res.json();
     setGuardando(false);
     if (!data.cantidad) { setError("No se pudo guardar. Revisá los campos."); return; }
-    router.push("/stock#stock");
+    router.push("/stock/listado");
   }
 
   return (

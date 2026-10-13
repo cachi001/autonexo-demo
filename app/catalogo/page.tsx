@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Camera, CheckCircle2, X } from "lucide-react";
+import { Camera, CheckCircle2 } from "lucide-react";
 
 type Vehiculo = {
   dominio: string; marca: string; modelo: string; anio: string; tipo: string;
   precio: string; km: string; color: string; descripcion: string;
-  documentacion_validada: boolean;
+  documentacion_validada: boolean; fotos: string[];
 };
 
 function formatoPrecio(p: string) {
@@ -22,12 +22,6 @@ function accentFicha(v: Vehiculo) {
 export default function CatalogoPage() {
   const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
   const [query, setQuery] = useState("");
-  const [abierto, setAbierto] = useState<Vehiculo | null>(null);
-  const [nombre, setNombre] = useState("");
-  const [telefono, setTelefono] = useState("");
-  const [mensaje, setMensaje] = useState("");
-  const [confirmado, setConfirmado] = useState(false);
-  const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
     fetch("/api/catalogo/stock").then((r) => r.json()).then((d) => setVehiculos(d.vehiculos || []));
@@ -37,26 +31,6 @@ export default function CatalogoPage() {
     const q = query.toLowerCase().trim();
     return !q || [v.marca, v.modelo, v.dominio].some((c) => c.toLowerCase().includes(q));
   });
-
-  function abrirFicha(v: Vehiculo) {
-    fetch(`/api/catalogo/${encodeURIComponent(v.dominio)}/vista`, { method: "POST" }).catch(() => {});
-    setAbierto(v);
-    setConfirmado(false);
-    setNombre(""); setTelefono(""); setMensaje("");
-  }
-
-  async function enviarConsulta() {
-    if (!abierto || !nombre || !mensaje) { alert("Completá tu nombre y la consulta."); return; }
-    setEnviando(true);
-    const res = await fetch(`/api/catalogo/${encodeURIComponent(abierto.dominio)}/consulta`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nombre, telefono, mensaje }),
-    });
-    const data = await res.json();
-    setEnviando(false);
-    if (data.error) { alert("Error: " + data.error); return; }
-    setConfirmado(true);
-  }
 
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900">
@@ -90,9 +64,13 @@ export default function CatalogoPage() {
         <div className="mb-4 text-sm text-zinc-500">{filtrados.length} vehículo(s) disponible(s)</div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtrados.map((v) => (
-            <button key={v.dominio} onClick={() => abrirFicha(v)} className="overflow-hidden rounded-xl border border-zinc-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-2 hover:ring-blue-200">
+            <Link key={v.dominio} href={`/catalogo/${encodeURIComponent(v.dominio)}`} className="overflow-hidden rounded-xl border border-zinc-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-2 hover:ring-blue-200">
               <div className={`relative flex h-32 items-center justify-center gap-1.5 text-xs text-zinc-500 sm:h-36 ${accentFicha(v)}`}>
-                <Camera className="h-4 w-4" strokeWidth={1.75} /> foto próximamente
+                {v.fotos && v.fotos.length > 0 ? (
+                  <img src={v.fotos[0]} alt={`${v.marca} ${v.modelo}`} className="h-full w-full object-cover" />
+                ) : (
+                  <><Camera className="h-4 w-4" strokeWidth={1.75} /> foto próximamente</>
+                )}
                 {v.documentacion_validada && (
                   <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm">
                     <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} /> Papeles OK
@@ -109,53 +87,11 @@ export default function CatalogoPage() {
                   <span className="rounded bg-zinc-100 px-1.5 py-0.5">{v.color || "—"}</span>
                 </div>
               </div>
-            </button>
+            </Link>
           ))}
         </div>
         {filtrados.length === 0 && <p className="text-sm text-zinc-400">Todavía no hay vehículos cargados.</p>}
       </main>
-
-      {abierto && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 p-3 sm:p-5" onClick={() => setAbierto(null)}>
-          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className={`relative flex h-36 items-center justify-center gap-1.5 text-sm text-zinc-500 sm:h-40 ${accentFicha(abierto)}`}>
-              <Camera className="h-4 w-4" strokeWidth={1.75} /> foto próximamente
-              <button onClick={() => setAbierto(null)} className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 shadow"><X className="h-4 w-4" strokeWidth={2} /></button>
-            </div>
-            <div className="p-5 sm:p-6">
-              <h2 className="text-lg font-bold">{abierto.marca} {abierto.modelo}</h2>
-              <div className="mb-3 text-xl font-bold text-blue-600">{formatoPrecio(abierto.precio)}</div>
-              <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-500">
-                <span>Año: {abierto.anio}</span><span>Km: {abierto.km || "—"}</span>
-                <span>Color: {abierto.color || "—"}</span><span>Dominio: {abierto.dominio}</span>
-              </div>
-              {abierto.descripcion && <p className="mb-3 text-sm text-zinc-600">{abierto.descripcion}</p>}
-
-              {confirmado ? (
-                <div className="flex gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-relaxed text-emerald-700">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
-                  <span>Tu consulta fue enviada a la agencia. Todavía no está confirmada ni respondida — un vendedor la va a revisar y te va a contactar directamente. Autoclick no vende el auto ni confirma nada en tu nombre.</span>
-                </div>
-              ) : (
-                <div>
-                  <label className="mb-2 block text-xs font-semibold">Tu nombre
-                    <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" />
-                  </label>
-                  <label className="mb-2 block text-xs font-semibold">Teléfono (opcional)
-                    <input value={telefono} onChange={(e) => setTelefono(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" />
-                  </label>
-                  <label className="mb-3 block text-xs font-semibold">Tu consulta
-                    <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Ej: ¿Está disponible? ¿Acepta permuta?" className="mt-1 min-h-[70px] w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" />
-                  </label>
-                  <button onClick={enviarConsulta} disabled={enviando} className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-                    {enviando ? "Enviando…" : "Enviar consulta a la agencia"}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

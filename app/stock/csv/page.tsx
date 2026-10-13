@@ -41,7 +41,7 @@ export default function CargarPorCsvPage() {
     const data = await res.json();
     setGuardando(false);
     if (!data.cantidad) { setCsvStatus("No se pudo guardar."); return; }
-    router.push("/stock#stock");
+    router.push("/stock/listado");
   }
 
   return (
@@ -50,22 +50,22 @@ export default function CargarPorCsvPage() {
         <div className="flex items-center gap-3 pl-12 lg:pl-0">
           <Link href="/stock" className="text-sm text-zinc-400 hover:text-zinc-700">Panel</Link>
           <span className="text-zinc-300">/</span>
-          <h1 className="text-base font-semibold tracking-tight">Cargar stock por planilla</h1>
+          <h1 className="text-base font-semibold tracking-tight">Cargar stock por planilla (CSV o Excel)</h1>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl space-y-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-6">
-          <h2 className="text-sm font-semibold">Subí la planilla CSV</h2>
+          <h2 className="text-sm font-semibold">Subí la planilla (.csv, .xlsx o .xls)</h2>
           <p className="mt-1 text-sm text-zinc-500">Columnas esperadas: {COLUMNAS.join(", ")}. Las obligatorias son dominio, marca, modelo, año y precio.</p>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-violet-300 bg-violet-50 px-4 py-2.5 text-sm font-medium text-violet-700 hover:bg-violet-100">
-              <Upload className="h-4 w-4" strokeWidth={2} /> Elegir archivo CSV
-              <input type="file" accept=".csv" className="hidden" onChange={(e) => e.target.files?.[0] && subirCsv(e.target.files[0])} />
+              <Upload className="h-4 w-4" strokeWidth={2} /> Elegir archivo (CSV o Excel)
+              <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => e.target.files?.[0] && subirCsv(e.target.files[0])} />
             </label>
-            <a href="/api/stock/plantilla.csv" className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-700">
-              <Download className="h-4 w-4" strokeWidth={2} /> Descargar plantilla de ejemplo
+            <a href="/api/stock/plantilla.xlsx" className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-700">
+              <Download className="h-4 w-4" strokeWidth={2} /> Descargar plantilla de ejemplo (Excel)
             </a>
           </div>
           {nombreArchivo && <div className="mt-2 text-xs text-zinc-400">{nombreArchivo}</div>}

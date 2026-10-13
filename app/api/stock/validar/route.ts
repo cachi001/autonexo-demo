@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validarFila, COLUMNAS_OBLIGATORIAS } from "@/lib/data";
+import * as XLSX from "xlsx";
 
 function parseCsv(texto: string): Record<string, string>[] {
   const lineas = texto.replace(/\r\n/g, "\n").split("\n").filter((l) => l.trim());
@@ -13,13 +14,27 @@ function parseCsv(texto: string): Record<string, string>[] {
   });
 }
 
+function parseExcel(buffer: ArrayBuffer): Record<string, string>[] {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const hoja = workbook.Sheets[workbook.SheetNames[0]];
+  const filas: Record<string, unknown>[] = XLSX.utils.sheet_to_json(hoja, { defval: "" });
+  return filas.map((fila) => {
+    const normalizada: Record<string, string> = {};
+    for (const [k, v] of Object.entries(fila)) {
+      normalizada[k.trim().toLowerCase()] = String(v ?? "").trim();
+    }
+    return normalizada;
+  });
+}
+
 export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "Falta el archivo" });
 
-  const texto = await file.text();
-  const filasCrudas = parseCsv(texto);
+  const esExcel = /\.xlsx?$/i.test(file.name);
+  const filasCrudas = esExcel ? parseExcel(await file.arrayBuffer()) : parseCsv(await file.text());
+
   if (filasCrudas.length === 0) {
     return NextResponse.json({ error: "El archivo está vacío" });
   }

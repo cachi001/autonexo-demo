@@ -16,6 +16,7 @@ export type Vehiculo = {
   documentacion_validada: boolean;
   documentacion_validada_fecha: string | null;
   vistas_reales: number;
+  fotos: string[];
 };
 
 export type Lead = {
@@ -42,6 +43,7 @@ const SEED_STOCK: Vehiculo[] = [
     documentacion_validada: true,
     documentacion_validada_fecha: "2026-10-12",
     vistas_reales: 3,
+    fotos: [],
   },
   {
     dominio: "AC456EF",
@@ -56,6 +58,7 @@ const SEED_STOCK: Vehiculo[] = [
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
+    fotos: [],
   },
   {
     dominio: "A208SDV",
@@ -70,6 +73,7 @@ const SEED_STOCK: Vehiculo[] = [
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
+    fotos: [],
   },
 ];
 
@@ -134,7 +138,7 @@ export function buscarVehiculo(dominio: string): Vehiculo | undefined {
   return getStore().stock.find((v) => v.dominio === dominio);
 }
 
-export function agregarVehiculo(v: Omit<Vehiculo, "documentacion_validada" | "documentacion_validada_fecha" | "vistas_reales">) {
+export function agregarVehiculo(v: Omit<Vehiculo, "documentacion_validada" | "documentacion_validada_fecha" | "vistas_reales" | "fotos">) {
   const store = getStore();
   if (store.stock.some((x) => x.dominio === v.dominio)) return null;
   const nuevo: Vehiculo = {
@@ -142,10 +146,29 @@ export function agregarVehiculo(v: Omit<Vehiculo, "documentacion_validada" | "do
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
+    fotos: [],
   };
   store.stock.push(nuevo);
   guardarStore(store);
   return nuevo;
+}
+
+export function agregarFotos(dominio: string, fotosBase64: string[]) {
+  const store = getStore();
+  const v = store.stock.find((x) => x.dominio === dominio);
+  if (!v) return null;
+  v.fotos = [...(v.fotos || []), ...fotosBase64];
+  guardarStore(store);
+  return v;
+}
+
+export function quitarFoto(dominio: string, indice: number) {
+  const store = getStore();
+  const v = store.stock.find((x) => x.dominio === dominio);
+  if (!v) return null;
+  v.fotos = (v.fotos || []).filter((_, i) => i !== indice);
+  guardarStore(store);
+  return v;
 }
 
 export function setDocumentacionValidada(dominio: string, validada: boolean) {

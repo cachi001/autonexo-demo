@@ -10,8 +10,8 @@ const NAV = [
   { href: "/stock", Icon: LayoutDashboard, label: "Resumen" },
   { href: "/stock/cedula", Icon: Camera, label: "Cargar por cédula" },
   { href: "/stock/csv", Icon: FileText, label: "Cargar por planilla" },
-  { href: "/stock#stock", Icon: Car, label: "Stock" },
-  { href: "/stock#consultas", Icon: MessageCircle, label: "Consultas" },
+  { href: "/stock/listado", Icon: Car, label: "Stock" },
+  { href: "/stock/consultas", Icon: MessageCircle, label: "Consultas" },
 ];
 
 export default function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
