@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Upload, ArrowLeft, ArrowRight, Loader2, AlertTriangle, CheckCircle2, User,
+  Upload, ArrowLeft, ArrowRight, Loader2, AlertTriangle, CheckCircle2, User, X, ZoomIn,
 } from "lucide-react";
 
 type DiagnosticoCedula = {
@@ -21,18 +21,36 @@ type Paso = "frente" | "dorso" | "procesando" | "resultado";
 
 const OCR_BACKEND_URL = process.env.NEXT_PUBLIC_OCR_BACKEND_URL || "https://autoclick-ocr-backend.onrender.com";
 
+// El "año modelo" casi nunca viene impreso en la cédula verde (ver nota en
+// vision.py) -> no se muestra como "leído del documento", se pide en la
+// sección que completa la agencia, junto con los demás datos que tampoco
+// están en la cédula.
 const CAMPOS_CEDULA = [
   { key: "dominio", label: "Dominio" },
   { key: "marca", label: "Marca" },
   { key: "modelo", label: "Modelo" },
-  { key: "anio", label: "Año" },
 ];
 const CAMPOS_COMPLETAR = [
+  { key: "anio", label: "Año", placeholder: "Ej: 2019" },
   { key: "tipo", label: "Tipo", placeholder: "Ej: SEDAN" },
   { key: "precio", label: "Precio", placeholder: "Ej: 8500000" },
   { key: "km", label: "Km", placeholder: "Ej: 65000" },
   { key: "color", label: "Color", placeholder: "Ej: BLANCO" },
 ];
+
+function ImagenDiagnostico({ src, alt, caption, onAmpliar }: { src: string; alt: string; caption: string; onAmpliar: (src: string) => void }) {
+  return (
+    <figure>
+      <button type="button" onClick={() => onAmpliar(src)} className="group relative block w-full overflow-hidden rounded-md border border-zinc-200">
+        <img src={src} alt={alt} className="w-full" />
+        <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100">
+          <ZoomIn className="h-5 w-5 text-white" strokeWidth={2} />
+        </span>
+      </button>
+      <figcaption className="mt-1 text-[10px] text-zinc-400">{caption}</figcaption>
+    </figure>
+  );
+}
 
 function StepChip({ n, label, estado }: { n: number; label: string; estado: "pendiente" | "activo" | "hecho" }) {
   return (
@@ -64,8 +82,9 @@ export default function CargarPorCedulaPage() {
   const [titular, setTitular] = useState<Titular | null>(null);
   const [advertencias, setAdvertencias] = useState<string[]>([]);
   const [diagnostico, setDiagnostico] = useState<DiagnosticoCedula | null>(null);
-  const [completar, setCompletar] = useState<Record<string, string>>({ tipo: "", precio: "", km: "", color: "", descripcion: "" });
+  const [completar, setCompletar] = useState<Record<string, string>>({ anio: "", tipo: "", precio: "", km: "", color: "", descripcion: "" });
   const [guardando, setGuardando] = useState(false);
+  const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
 
   function elegirFrente(f: File) {
     setFileFrente(f);
@@ -241,14 +260,14 @@ export default function CargarPorCedulaPage() {
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {diagnostico.frente_original_b64 && (
                     <>
-                      <figure><img src={`data:image/jpeg;base64,${diagnostico.frente_original_b64}`} className="w-full rounded-md border border-zinc-200" alt="Frente original" /><figcaption className="mt-1 text-[10px] text-zinc-400">Frente original</figcaption></figure>
-                      <figure><img src={`data:image/jpeg;base64,${diagnostico.frente_procesada_b64}`} className="w-full rounded-md border border-zinc-200" alt="Frente procesada" /><figcaption className="mt-1 text-[10px] text-zinc-400">{diagnostico.frente_documento_detectado ? "Enderezada" : "Borde no detectado"}</figcaption></figure>
+                      <ImagenDiagnostico src={`data:image/jpeg;base64,${diagnostico.frente_original_b64}`} alt="Frente original" caption="Frente original" onAmpliar={setImagenAmpliada} />
+                      <ImagenDiagnostico src={`data:image/jpeg;base64,${diagnostico.frente_procesada_b64}`} alt="Frente procesada" caption={diagnostico.frente_documento_detectado ? "Enderezada" : "Borde no detectado"} onAmpliar={setImagenAmpliada} />
                     </>
                   )}
                   {diagnostico.dorso_original_b64 && (
                     <>
-                      <figure><img src={`data:image/jpeg;base64,${diagnostico.dorso_original_b64}`} className="w-full rounded-md border border-zinc-200" alt="Dorso original" /><figcaption className="mt-1 text-[10px] text-zinc-400">Dorso original</figcaption></figure>
-                      <figure><img src={`data:image/jpeg;base64,${diagnostico.dorso_procesada_b64}`} className="w-full rounded-md border border-zinc-200" alt="Dorso procesada" /><figcaption className="mt-1 text-[10px] text-zinc-400">{diagnostico.dorso_documento_detectado ? "Enderezada" : "Borde no detectado"}</figcaption></figure>
+                      <ImagenDiagnostico src={`data:image/jpeg;base64,${diagnostico.dorso_original_b64}`} alt="Dorso original" caption="Dorso original" onAmpliar={setImagenAmpliada} />
+                      <ImagenDiagnostico src={`data:image/jpeg;base64,${diagnostico.dorso_procesada_b64}`} alt="Dorso procesada" caption={diagnostico.dorso_documento_detectado ? "Enderezada" : "Borde no detectado"} onAmpliar={setImagenAmpliada} />
                     </>
                   )}
                 </div>
@@ -350,6 +369,15 @@ export default function CargarPorCedulaPage() {
           </div>
         )}
       </main>
+
+      {imagenAmpliada && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setImagenAmpliada(null)}>
+          <button onClick={() => setImagenAmpliada(null)} className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20">
+            <X className="h-5 w-5" strokeWidth={2} />
+          </button>
+          <img src={imagenAmpliada} alt="Imagen ampliada" className="max-h-full max-w-full rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
     </>
   );
 }
