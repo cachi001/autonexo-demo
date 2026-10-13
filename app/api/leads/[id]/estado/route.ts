@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!["pendiente", "respondido", "cerrado"].includes(estado)) {
     return NextResponse.json({ error: `Estado inválido: ${estado}` });
   }
-  const lead = actualizarEstadoLead(id, estado);
+  const lead = await actualizarEstadoLead(id, estado);
   if (!lead) return NextResponse.json({ error: `No se encontró el lead '${id}'` });
   return NextResponse.json(lead);
 }

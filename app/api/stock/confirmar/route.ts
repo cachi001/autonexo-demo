@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   const agregados = [];
   for (const f of body.filas) {
     if (!f.valida) continue;
-    const v = agregarVehiculo({
+    const v = await agregarVehiculo({
       dominio: f.datos.dominio,
       marca: f.datos.marca,
       modelo: f.datos.modelo,

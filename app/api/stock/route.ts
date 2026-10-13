@@ -8,8 +8,8 @@ import { listarStock, contarLeadsPorDominio } from "@/lib/data";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const conteo = contarLeadsPorDominio();
-  const vehiculos = listarStock().map((v) => ({
+  const conteo = await contarLeadsPorDominio();
+  const vehiculos = (await listarStock()).map((v) => ({
     ...v,
     consultas_reales: conteo[v.dominio] || 0,
   }));

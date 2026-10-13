@@ -1,7 +1,11 @@
-// Prototipo: datos en memoria (no hay base de datos real todavía).
-// Se usa globalThis para que sobrevivan al hot-reload en desarrollo y a la
-// reutilización de instancias "calientes" de función en Vercel — en
-// producción real esto sería Postgres/similar, acá alcanza para la demo.
+// Persistencia real en Postgres (Neon). Antes esto escribía un archivo JSON
+// en disco, pero el filesystem de las funciones serverless de Vercel es
+// efímero y no se comparte entre invocaciones — un POST que agregaba stock
+// podía "perderse" antes del siguiente GET. Con una base de datos de verdad
+// esto queda resuelto.
+import { neon } from "@neondatabase/serverless";
+
+const sql = neon(process.env.POSTGRES_URL!);
 
 export type Vehiculo = {
   dominio: string;
@@ -77,121 +81,154 @@ const SEED_STOCK: Vehiculo[] = [
   },
 ];
 
-type Store = {
-  stock: Vehiculo[];
-  leads: Lead[];
-};
+// Se corre una sola vez por instancia "caliente" (no en cada query) — el
+// flag vive a nivel de módulo.
+let inicializado: Promise<void> | null = null;
 
-// Persistencia en un archivo JSON, no solo en memoria. Se probó primero con
-// un global en memoria (`globalThis`) y "next start" en esta máquina lo
-// perdía entre request y request (varios workers no comparten memoria) —
-// un lead creado por POST no aparecía después en el GET. Un archivo en disco
-// lo resuelve para desarrollo local y para un servidor propio tradicional.
-//
-// Importante para cuando esto se despliegue en Vercel: las funciones
-// serverless de Vercel tienen sistema de archivos efímero (no garantiza que
-// algo escrito en una invocación siga estando en la siguiente, ni que dos
-// instancias compartan el mismo disco) — esta demo puede "perder" cambios
-// entre recargas en producción real. Para que los datos persistan de verdad
-// ahí hace falta una base de datos (Vercel KV/Postgres), no un archivo.
-import fs from "fs";
-import path from "path";
-
-const DATA_FILE = path.join(process.cwd(), ".data", "store.json");
-
-function leerArchivo(): Store | null {
-  try {
-    const texto = fs.readFileSync(DATA_FILE, "utf-8");
-    return JSON.parse(texto) as Store;
-  } catch {
-    return null;
+function asegurarTablas(): Promise<void> {
+  if (!inicializado) {
+    inicializado = (async () => {
+      await sql`
+        CREATE TABLE IF NOT EXISTS stock (
+          dominio TEXT PRIMARY KEY,
+          marca TEXT NOT NULL,
+          modelo TEXT NOT NULL,
+          anio TEXT NOT NULL DEFAULT '',
+          tipo TEXT NOT NULL DEFAULT '',
+          precio TEXT NOT NULL DEFAULT '',
+          km TEXT NOT NULL DEFAULT '',
+          color TEXT NOT NULL DEFAULT '',
+          descripcion TEXT NOT NULL DEFAULT '',
+          documentacion_validada BOOLEAN NOT NULL DEFAULT FALSE,
+          documentacion_validada_fecha TEXT,
+          vistas_reales INTEGER NOT NULL DEFAULT 0,
+          fotos JSONB NOT NULL DEFAULT '[]'::jsonb
+        )
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS leads (
+          id TEXT PRIMARY KEY,
+          dominio TEXT NOT NULL,
+          nombre TEXT NOT NULL,
+          telefono TEXT,
+          mensaje TEXT NOT NULL,
+          fecha TEXT NOT NULL,
+          estado TEXT NOT NULL
+        )
+      `;
+      const [{ count }] = (await sql`SELECT COUNT(*)::int AS count FROM stock`) as { count: number }[];
+      if (count === 0) {
+        for (const v of SEED_STOCK) {
+          await sql`
+            INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
+            VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.documentacion_validada}, ${v.documentacion_validada_fecha}, ${v.vistas_reales}, ${JSON.stringify(v.fotos)})
+          `;
+        }
+      }
+    })();
   }
+  return inicializado;
 }
 
-function escribirArchivo(store: Store) {
-  try {
-    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-    fs.writeFileSync(DATA_FILE, JSON.stringify(store, null, 2), "utf-8");
-  } catch {
-    // en un entorno de solo lectura (ej. función serverless fría) se ignora:
-    // la demo sigue funcionando en memoria durante esa misma invocación.
-  }
+function filaAVehiculo(r: Record<string, unknown>): Vehiculo {
+  return {
+    dominio: r.dominio as string,
+    marca: r.marca as string,
+    modelo: r.modelo as string,
+    anio: r.anio as string,
+    tipo: r.tipo as string,
+    precio: r.precio as string,
+    km: r.km as string,
+    color: r.color as string,
+    descripcion: r.descripcion as string,
+    documentacion_validada: r.documentacion_validada as boolean,
+    documentacion_validada_fecha: r.documentacion_validada_fecha as string | null,
+    vistas_reales: r.vistas_reales as number,
+    fotos: (r.fotos as string[]) || [],
+  };
 }
 
-function getStore(): Store {
-  const existente = leerArchivo();
-  if (existente) return existente;
-  const nuevo: Store = { stock: SEED_STOCK.map((v) => ({ ...v })), leads: [] };
-  escribirArchivo(nuevo);
-  return nuevo;
+function filaALead(r: Record<string, unknown>): Lead {
+  return {
+    id: r.id as string,
+    dominio: r.dominio as string,
+    nombre: r.nombre as string,
+    telefono: r.telefono as string | null,
+    mensaje: r.mensaje as string,
+    fecha: r.fecha as string,
+    estado: r.estado as Lead["estado"],
+  };
 }
 
-function guardarStore(store: Store) {
-  escribirArchivo(store);
+export async function listarStock(): Promise<Vehiculo[]> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM stock`;
+  return filas.map(filaAVehiculo);
 }
 
-export function listarStock(): Vehiculo[] {
-  return getStore().stock;
+export async function buscarVehiculo(dominio: string): Promise<Vehiculo | undefined> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM stock WHERE dominio = ${dominio}`;
+  return filas[0] ? filaAVehiculo(filas[0]) : undefined;
 }
 
-export function buscarVehiculo(dominio: string): Vehiculo | undefined {
-  return getStore().stock.find((v) => v.dominio === dominio);
-}
-
-export function agregarVehiculo(v: Omit<Vehiculo, "documentacion_validada" | "documentacion_validada_fecha" | "vistas_reales" | "fotos">) {
-  const store = getStore();
-  if (store.stock.some((x) => x.dominio === v.dominio)) return null;
-  const nuevo: Vehiculo = {
+export async function agregarVehiculo(
+  v: Omit<Vehiculo, "documentacion_validada" | "documentacion_validada_fecha" | "vistas_reales" | "fotos">
+): Promise<Vehiculo | null> {
+  await asegurarTablas();
+  const existente = await sql`SELECT dominio FROM stock WHERE dominio = ${v.dominio}`;
+  if (existente.length > 0) return null;
+  await sql`
+    INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
+    VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, FALSE, NULL, 0, '[]'::jsonb)
+  `;
+  return {
     ...v,
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
     fotos: [],
   };
-  store.stock.push(nuevo);
-  guardarStore(store);
-  return nuevo;
 }
 
-export function agregarFotos(dominio: string, fotosBase64: string[]) {
-  const store = getStore();
-  const v = store.stock.find((x) => x.dominio === dominio);
-  if (!v) return null;
-  v.fotos = [...(v.fotos || []), ...fotosBase64];
-  guardarStore(store);
-  return v;
+export async function agregarFotos(dominio: string, fotosBase64: string[]): Promise<Vehiculo | null> {
+  await asegurarTablas();
+  const actual = await buscarVehiculo(dominio);
+  if (!actual) return null;
+  const fotos = [...actual.fotos, ...fotosBase64];
+  await sql`UPDATE stock SET fotos = ${JSON.stringify(fotos)}::jsonb WHERE dominio = ${dominio}`;
+  return { ...actual, fotos };
 }
 
-export function quitarFoto(dominio: string, indice: number) {
-  const store = getStore();
-  const v = store.stock.find((x) => x.dominio === dominio);
-  if (!v) return null;
-  v.fotos = (v.fotos || []).filter((_, i) => i !== indice);
-  guardarStore(store);
-  return v;
+export async function quitarFoto(dominio: string, indice: number): Promise<Vehiculo | null> {
+  await asegurarTablas();
+  const actual = await buscarVehiculo(dominio);
+  if (!actual) return null;
+  const fotos = actual.fotos.filter((_, i) => i !== indice);
+  await sql`UPDATE stock SET fotos = ${JSON.stringify(fotos)}::jsonb WHERE dominio = ${dominio}`;
+  return { ...actual, fotos };
 }
 
-export function setDocumentacionValidada(dominio: string, validada: boolean) {
-  const store = getStore();
-  const v = store.stock.find((x) => x.dominio === dominio);
-  if (!v) return null;
-  v.documentacion_validada = validada;
-  v.documentacion_validada_fecha = validada ? new Date().toISOString().slice(0, 10) : null;
-  guardarStore(store);
-  return v;
+export async function setDocumentacionValidada(dominio: string, validada: boolean): Promise<Vehiculo | null> {
+  await asegurarTablas();
+  const fecha = validada ? new Date().toISOString().slice(0, 10) : null;
+  const filas = await sql`
+    UPDATE stock SET documentacion_validada = ${validada}, documentacion_validada_fecha = ${fecha}
+    WHERE dominio = ${dominio} RETURNING *
+  `;
+  return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
-export function registrarVista(dominio: string) {
-  const store = getStore();
-  const v = store.stock.find((x) => x.dominio === dominio);
-  if (!v) return null;
-  v.vistas_reales += 1;
-  guardarStore(store);
-  return v;
+export async function registrarVista(dominio: string): Promise<Vehiculo | null> {
+  await asegurarTablas();
+  const filas = await sql`
+    UPDATE stock SET vistas_reales = vistas_reales + 1 WHERE dominio = ${dominio} RETURNING *
+  `;
+  return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
-export function crearLead(dominio: string, nombre: string, mensaje: string, telefono?: string): Lead {
-  const store = getStore();
+export async function crearLead(dominio: string, nombre: string, mensaje: string, telefono?: string): Promise<Lead> {
+  await asegurarTablas();
   const lead: Lead = {
     id: Math.random().toString(36).slice(2, 12),
     dominio,
@@ -201,29 +238,30 @@ export function crearLead(dominio: string, nombre: string, mensaje: string, tele
     fecha: new Date().toISOString().slice(0, 16).replace("T", " "),
     estado: "pendiente",
   };
-  store.leads.push(lead);
-  guardarStore(store);
+  await sql`
+    INSERT INTO leads (id, dominio, nombre, telefono, mensaje, fecha, estado)
+    VALUES (${lead.id}, ${lead.dominio}, ${lead.nombre}, ${lead.telefono}, ${lead.mensaje}, ${lead.fecha}, ${lead.estado})
+  `;
   return lead;
 }
 
-export function listarLeads(): Lead[] {
-  return [...getStore().leads].sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+export async function listarLeads(): Promise<Lead[]> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM leads ORDER BY fecha DESC`;
+  return filas.map(filaALead);
 }
 
-export function actualizarEstadoLead(id: string, estado: Lead["estado"]) {
-  const store = getStore();
-  const lead = store.leads.find((l) => l.id === id);
-  if (!lead) return null;
-  lead.estado = estado;
-  guardarStore(store);
-  return lead;
+export async function actualizarEstadoLead(id: string, estado: Lead["estado"]): Promise<Lead | null> {
+  await asegurarTablas();
+  const filas = await sql`UPDATE leads SET estado = ${estado} WHERE id = ${id} RETURNING *`;
+  return filas[0] ? filaALead(filas[0]) : null;
 }
 
-export function contarLeadsPorDominio(): Record<string, number> {
+export async function contarLeadsPorDominio(): Promise<Record<string, number>> {
+  await asegurarTablas();
+  const filas = await sql`SELECT dominio, COUNT(*)::int AS cantidad FROM leads GROUP BY dominio`;
   const conteo: Record<string, number> = {};
-  for (const lead of getStore().leads) {
-    conteo[lead.dominio] = (conteo[lead.dominio] || 0) + 1;
-  }
+  for (const f of filas) conteo[f.dominio as string] = f.cantidad as number;
   return conteo;
 }
 
@@ -268,21 +306,4 @@ export function validarFila(fila: Record<string, string>, numero: number): FilaV
   }
 
   return { numero_fila: numero, datos, errores, valida: errores.length === 0 };
-}
-
-// --- Datos "leídos" de una cédula, simulados (demo de Vercel sin PaddleOCR) ---
-// Ver nota en el informe: PaddleOCR no corre en funciones serverless de Vercel
-// (pesa cientos de MB y tarda ~9s solo en cargar el modelo). Estos son
-// resultados reales que SÍ se obtuvieron con el prototipo local corriendo
-// PaddleOCR de verdad contra fotos de cédulas reales — no son inventados,
-// solo se "reproducen" acá en vez de correr el modelo pesado en cada demo.
-const EJEMPLOS_CEDULA = [
-  { dominio: "AGK38332", marca: "PEUGEOT", modelo: "PARTNER CONFORT 1.6 HDI", anio: "", chasis: "8AEGC9HJCJG504265" },
-  { dominio: "A208SDV", marca: "ZANELLA", modelo: "SAPUCAI 150 F", anio: "", chasis: "8A6MAST53NS002671" },
-  { dominio: "AB123CD", marca: "VOLKSWAGEN", modelo: "GOL TREND", anio: "2019", chasis: "9BWAB05X1KP654321" },
-];
-
-export function simularLecturaCedula() {
-  const ejemplo = EJEMPLOS_CEDULA[Math.floor(Math.random() * EJEMPLOS_CEDULA.length)];
-  return { ...ejemplo };
 }

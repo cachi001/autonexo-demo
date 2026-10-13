@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
     base64s.push(`data:${archivo.type};base64,${buffer.toString("base64")}`);
   }
 
-  const vehiculo = agregarFotos(dominio, base64s);
+  const vehiculo = await agregarFotos(dominio, base64s);
   if (!vehiculo) return NextResponse.json({ error: `No se encontró el dominio '${dominio}'` }, { status: 404 });
   return NextResponse.json({ fotos: vehiculo.fotos });
 }
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ dominio: string }> }) {
   const { dominio } = await params;
   const { indice } = await req.json();
-  const vehiculo = quitarFoto(dominio, indice);
+  const vehiculo = await quitarFoto(dominio, indice);
   if (!vehiculo) return NextResponse.json({ error: `No se encontró el dominio '${dominio}'` }, { status: 404 });
   return NextResponse.json({ fotos: vehiculo.fotos });
 }
