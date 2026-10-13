@@ -54,41 +54,55 @@ export default function CatalogoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-zinc-900">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-200 px-8 py-6">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">Catálogo — Prototipo (lado comprador)</h1>
-          <p className="max-w-xl text-sm text-zinc-500">
-            Al abrir una ficha se registra una vista real; al consultar, se crea un interés que la agencia ve en su panel — nada se confirma automáticamente.
-          </p>
+    <div className="min-h-screen bg-zinc-50 text-zinc-900">
+      <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">A</div>
+            <div className="text-sm font-bold tracking-tight">Autos<span className="text-blue-600">click</span></div>
+          </div>
+          <Link href="/stock" className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
+            Panel de agencia →
+          </Link>
         </div>
-        <Link href="/stock" className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50">
-          Panel de agencia →
-        </Link>
       </header>
 
-      <main className="mx-auto max-w-4xl px-8 py-8">
-        <input
-          value={query} onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscá por marca, modelo o dominio…"
-          className="mb-5 w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-sm"
-        />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+      <section className="border-b border-zinc-200 bg-gradient-to-br from-blue-600 to-blue-700 px-6 py-10 text-white">
+        <div className="mx-auto max-w-6xl">
+          <h1 className="mb-1 text-2xl font-bold tracking-tight">Catálogo de vehículos</h1>
+          <p className="mb-5 max-w-xl text-sm text-blue-100">
+            Al abrir una ficha se registra una vista real; al consultar, se crea un interés que la agencia ve en su panel — nada se confirma automáticamente.
+          </p>
+          <input
+            value={query} onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscá por marca, modelo o dominio…"
+            className="w-full max-w-md rounded-lg border-0 px-4 py-2.5 text-sm text-zinc-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-white"
+          />
+        </div>
+      </section>
+
+      <main className="mx-auto max-w-6xl px-6 py-8">
+        <div className="mb-4 text-sm text-zinc-500">{filtrados.length} vehículo(s) disponible(s)</div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtrados.map((v) => (
-            <button key={v.dominio} onClick={() => abrirFicha(v)} className="overflow-hidden rounded-lg border border-zinc-200 text-left transition hover:shadow-md">
-              <div className="relative flex h-28 items-center justify-center bg-zinc-50 text-xs text-zinc-400">
-                📷 (próximamente)
+            <button key={v.dominio} onClick={() => abrirFicha(v)} className="overflow-hidden rounded-xl border border-zinc-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
+              <div className="relative flex h-36 items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200 text-xs text-zinc-400">
+                📷 foto próximamente
                 {v.documentacion_validada && (
                   <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] font-bold text-green-700">
                     ✓ Papeles OK
                   </span>
                 )}
               </div>
-              <div className="p-3">
+              <div className="p-4">
                 <div className="font-mono text-[11px] text-zinc-400">{v.dominio}</div>
                 <div className="text-sm font-semibold">{v.marca} {v.modelo}</div>
-                <div className="text-sm font-bold text-blue-600">{formatoPrecio(v.precio)}</div>
-                <div className="mt-1 flex justify-between text-[11px] text-zinc-500"><span>{v.anio}</span><span>{v.km ? `${v.km} km` : "—"}</span><span>{v.color || "—"}</span></div>
+                <div className="mt-0.5 text-lg font-bold text-blue-600">{formatoPrecio(v.precio)}</div>
+                <div className="mt-2 flex justify-between text-[11px] text-zinc-500">
+                  <span className="rounded bg-zinc-100 px-1.5 py-0.5">{v.anio}</span>
+                  <span className="rounded bg-zinc-100 px-1.5 py-0.5">{v.km ? `${v.km} km` : "—"}</span>
+                  <span className="rounded bg-zinc-100 px-1.5 py-0.5">{v.color || "—"}</span>
+                </div>
               </div>
             </button>
           ))}
@@ -97,39 +111,42 @@ export default function CatalogoPage() {
       </main>
 
       {abierto && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/45 p-5" onClick={() => setAbierto(null)}>
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-1 flex items-start justify-between">
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 p-5" onClick={() => setAbierto(null)}>
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="relative flex h-40 items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200 text-sm text-zinc-400">
+              📷 foto próximamente
+              <button onClick={() => setAbierto(null)} className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-sm shadow">✕</button>
+            </div>
+            <div className="p-6">
               <h2 className="text-lg font-bold">{abierto.marca} {abierto.modelo}</h2>
-              <button onClick={() => setAbierto(null)} className="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-500">✕</button>
-            </div>
-            <div className="mb-3 text-lg font-bold text-blue-600">{formatoPrecio(abierto.precio)}</div>
-            <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-500">
-              <span>Año: {abierto.anio}</span><span>Km: {abierto.km || "—"}</span>
-              <span>Color: {abierto.color || "—"}</span><span>Dominio: {abierto.dominio}</span>
-            </div>
-            {abierto.descripcion && <p className="mb-3 text-sm text-zinc-600">{abierto.descripcion}</p>}
+              <div className="mb-3 text-xl font-bold text-blue-600">{formatoPrecio(abierto.precio)}</div>
+              <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-500">
+                <span>Año: {abierto.anio}</span><span>Km: {abierto.km || "—"}</span>
+                <span>Color: {abierto.color || "—"}</span><span>Dominio: {abierto.dominio}</span>
+              </div>
+              {abierto.descripcion && <p className="mb-3 text-sm text-zinc-600">{abierto.descripcion}</p>}
 
-            {confirmado ? (
-              <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm leading-relaxed text-green-700">
-                ✓ Tu consulta fue enviada a la agencia. Todavía no está confirmada ni respondida — un vendedor la va a revisar y te va a contactar directamente. Autoclick no vende el auto ni confirma nada en tu nombre.
-              </div>
-            ) : (
-              <div>
-                <label className="mb-2 block text-xs font-semibold">Tu nombre
-                  <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm" />
-                </label>
-                <label className="mb-2 block text-xs font-semibold">Teléfono (opcional)
-                  <input value={telefono} onChange={(e) => setTelefono(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm" />
-                </label>
-                <label className="mb-3 block text-xs font-semibold">Tu consulta
-                  <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Ej: ¿Está disponible? ¿Acepta permuta?" className="mt-1 min-h-[70px] w-full rounded-md border border-zinc-300 px-3 py-2 text-sm" />
-                </label>
-                <button onClick={enviarConsulta} disabled={enviando} className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
-                  {enviando ? "Enviando…" : "Enviar consulta a la agencia"}
-                </button>
-              </div>
-            )}
+              {confirmado ? (
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm leading-relaxed text-green-700">
+                  ✓ Tu consulta fue enviada a la agencia. Todavía no está confirmada ni respondida — un vendedor la va a revisar y te va a contactar directamente. Autoclick no vende el auto ni confirma nada en tu nombre.
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-2 block text-xs font-semibold">Tu nombre
+                    <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm" />
+                  </label>
+                  <label className="mb-2 block text-xs font-semibold">Teléfono (opcional)
+                    <input value={telefono} onChange={(e) => setTelefono(e.target.value)} className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm" />
+                  </label>
+                  <label className="mb-3 block text-xs font-semibold">Tu consulta
+                    <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Ej: ¿Está disponible? ¿Acepta permuta?" className="mt-1 min-h-[70px] w-full rounded-md border border-zinc-300 px-3 py-2 text-sm" />
+                  </label>
+                  <button onClick={enviarConsulta} disabled={enviando} className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                    {enviando ? "Enviando…" : "Enviar consulta a la agencia"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

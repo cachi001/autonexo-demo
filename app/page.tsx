@@ -2,7 +2,8 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-white px-6 text-center text-zinc-900">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-zinc-50 to-blue-50 px-6 text-center text-zinc-900">
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-xl font-bold text-white">A</div>
       <div className="mb-2 text-xl font-bold tracking-tight">
         Autos<span className="text-blue-600">click</span>
       </div>
@@ -11,10 +12,10 @@ export default function Home() {
         Carga de stock por cédula o planilla, consultas de compradores, y el catálogo público — todo con datos de prueba que se mueven de verdad entre las dos pantallas.
       </p>
       <div className="flex gap-3">
-        <Link href="/stock" className="rounded-lg bg-zinc-900 px-5 py-3 text-sm font-semibold text-white hover:opacity-90">
+        <Link href="/stock" className="rounded-lg bg-zinc-900 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-90">
           Entrar como agencia
         </Link>
-        <Link href="/catalogo" className="rounded-lg border border-zinc-300 px-5 py-3 text-sm font-semibold hover:bg-zinc-50">
+        <Link href="/catalogo" className="rounded-lg border border-zinc-300 bg-white px-5 py-3 text-sm font-semibold hover:bg-zinc-50">
           Entrar como comprador
         </Link>
       </div>
