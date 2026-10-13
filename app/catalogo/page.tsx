@@ -16,9 +16,7 @@ function formatoPrecio(p: string) {
 }
 
 function accentFicha(v: Vehiculo) {
-  return v.tipo?.toLowerCase().includes("moto")
-    ? "from-violet-100 to-fuchsia-100"
-    : "from-blue-100 to-sky-100";
+  return v.tipo?.toLowerCase().includes("moto") ? "bg-violet-50" : "bg-blue-50";
 }
 
 export default function CatalogoPage() {
@@ -61,11 +59,11 @@ export default function CatalogoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-violet-50/30 text-zinc-900">
+    <div className="min-h-screen bg-zinc-50 text-zinc-900">
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-bold text-white">A</div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">A</div>
             <div className="text-sm font-bold tracking-tight">Autos<span className="text-blue-600">click</span></div>
           </div>
           <Link href="/stock" className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 sm:text-sm">
@@ -74,7 +72,7 @@ export default function CatalogoPage() {
         </div>
       </header>
 
-      <section className="border-b border-zinc-200 bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 px-4 py-8 text-white sm:px-6 sm:py-10">
+      <section className="border-b border-zinc-200 bg-blue-600 px-4 py-8 text-white sm:px-6 sm:py-10">
         <div className="mx-auto max-w-6xl">
           <h1 className="mb-1 text-xl font-bold tracking-tight sm:text-2xl">Catálogo de vehículos</h1>
           <p className="mb-5 max-w-xl text-sm text-blue-100">
@@ -93,7 +91,7 @@ export default function CatalogoPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtrados.map((v) => (
             <button key={v.dominio} onClick={() => abrirFicha(v)} className="overflow-hidden rounded-xl border border-zinc-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-2 hover:ring-blue-200">
-              <div className={`relative flex h-32 items-center justify-center gap-1.5 bg-gradient-to-br text-xs text-zinc-500 sm:h-36 ${accentFicha(v)}`}>
+              <div className={`relative flex h-32 items-center justify-center gap-1.5 text-xs text-zinc-500 sm:h-36 ${accentFicha(v)}`}>
                 <Camera className="h-4 w-4" strokeWidth={1.75} /> foto próximamente
                 {v.documentacion_validada && (
                   <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 shadow-sm">
@@ -120,7 +118,7 @@ export default function CatalogoPage() {
       {abierto && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 p-3 sm:p-5" onClick={() => setAbierto(null)}>
           <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className={`relative flex h-36 items-center justify-center gap-1.5 bg-gradient-to-br text-sm text-zinc-500 sm:h-40 ${accentFicha(abierto)}`}>
+            <div className={`relative flex h-36 items-center justify-center gap-1.5 text-sm text-zinc-500 sm:h-40 ${accentFicha(abierto)}`}>
               <Camera className="h-4 w-4" strokeWidth={1.75} /> foto próximamente
               <button onClick={() => setAbierto(null)} className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 shadow"><X className="h-4 w-4" strokeWidth={2} /></button>
             </div>
@@ -149,7 +147,7 @@ export default function CatalogoPage() {
                   <label className="mb-3 block text-xs font-semibold">Tu consulta
                     <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Ej: ¿Está disponible? ¿Acepta permuta?" className="mt-1 min-h-[70px] w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" />
                   </label>
-                  <button onClick={enviarConsulta} disabled={enviando} className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50">
+                  <button onClick={enviarConsulta} disabled={enviando} className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
                     {enviando ? "Enviando…" : "Enviar consulta a la agencia"}
                   </button>
                 </div>

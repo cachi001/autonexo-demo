@@ -1,34 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { simularLecturaCedula, validarFila } from "@/lib/data";
 
-// Simula lo que hace el prototipo local con PaddleOCR de verdad: PaddleOCR no
-// corre en funciones serverless de Vercel (pesa cientos de MB, ~9s solo para
-// cargar el modelo). Los resultados que devuelve esta ruta son datos reales
-// ya obtenidos con el prototipo local contra fotos de cédulas reales — no se
-// inventan, solo se "reproducen" acá para que la demo muestre el formato
-// correcto de los campos sin correr el modelo pesado en cada request.
-export async function POST(_req: NextRequest) {
-  await new Promise((r) => setTimeout(r, 900)); // simula el tiempo real de lectura
-  const leido = simularLecturaCedula();
+export const dynamic = "force-dynamic";
 
-  const filaCruda = {
-    dominio: leido.dominio,
-    marca: leido.marca,
-    modelo: leido.modelo,
-    anio: leido.anio,
-    tipo: "",
-    precio: "",
-    km: "",
-    color: "",
-    descripcion: "",
-  };
-  const fila = validarFila(filaCruda, 1);
+// Proxy server-side hacia el backend Python real (OpenCV + PaddleOCR),
+// desplegado aparte en Render porque ese modelo no entra en una función
+// serverless de Vercel (pesa cientos de MB). Vercel solo reenvía el archivo;
+// el OCR corre de verdad en el otro servicio.
+const OCR_BACKEND_URL = process.env.OCR_BACKEND_URL || "https://autoclick-ocr-backend.onrender.com";
 
-  return NextResponse.json({
-    fila,
-    chasis_detectado: leido.chasis,
-    tipo_documento: "cedula_verde",
-    advertencias: [] as string[],
-    demo: true,
-  });
+export async function POST(req: NextRequest) {
+  const formData = await req.formData();
+  if (!formData.get("frente")) {
+    return NextResponse.json({ error: "Falta la foto del frente de la cédula." }, { status: 400 });
+  }
+
+  let backendRes: Response;
+  try {
+    backendRes = await fetch(`${OCR_BACKEND_URL}/stock/cargar-por-cedula`, {
+      method: "POST",
+      body: formData,
+      // El free tier de Render "duerme" tras 15 min sin tráfico: la primera
+      // request después de eso puede tardar 50s+ en despertar el contenedor.
+      signal: AbortSignal.timeout(90_000),
+    });
+  } catch (err) {
+    const timedOut = err instanceof Error && err.name === "TimeoutError";
+    return NextResponse.json(
+      {
+        error: timedOut
+          ? "El backend de OCR no respondió a tiempo (puede estar 'despertando' tras inactividad — probá de nuevo en un minuto)."
+          : "No se pudo conectar con el backend de OCR real.",
+      },
+      { status: 502 },
+    );
+  }
+
+  if (!backendRes.ok) {
+    return NextResponse.json({ error: `El backend de OCR devolvió un error (${backendRes.status}).` }, { status: 502 });
+  }
+
+  const data = await backendRes.json();
+  return NextResponse.json(data);
 }
