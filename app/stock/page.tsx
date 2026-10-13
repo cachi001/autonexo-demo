@@ -193,40 +193,32 @@ export default function StockPage() {
         <main className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:space-y-6 sm:px-6 lg:px-8">
           {/* Stat cards */}
           <section id="resumen" className="grid scroll-mt-20 grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-              <div className="h-1.5 bg-gradient-to-r from-blue-400 to-blue-600" />
-              <div className="p-4">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">En stock</div>
-                <div className="mt-1 text-2xl font-bold text-blue-700">{stock.length}</div>
-              </div>
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 p-4 text-white shadow-lg shadow-blue-200">
+              <span className="absolute -right-2 -top-2 text-5xl opacity-20">🚗</span>
+              <div className="relative text-[11px] font-medium uppercase tracking-wide text-blue-100">En stock</div>
+              <div className="relative mt-1 text-3xl font-bold">{stock.length}</div>
             </div>
-            <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-              <div className="h-1.5 bg-gradient-to-r from-violet-400 to-violet-600" />
-              <div className="p-4">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">Vistas totales</div>
-                <div className="mt-1 text-2xl font-bold text-violet-700">{totalVistas}</div>
-              </div>
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 p-4 text-white shadow-lg shadow-violet-200">
+              <span className="absolute -right-2 -top-2 text-5xl opacity-20">👁</span>
+              <div className="relative text-[11px] font-medium uppercase tracking-wide text-violet-100">Vistas totales</div>
+              <div className="relative mt-1 text-3xl font-bold">{totalVistas}</div>
             </div>
-            <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-              <div className="h-1.5 bg-gradient-to-r from-amber-400 to-amber-600" />
-              <div className="p-4">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">Consultas pendientes</div>
-                <div className="mt-1 text-2xl font-bold text-amber-600">{pendientes}</div>
-              </div>
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 p-4 text-white shadow-lg shadow-amber-200">
+              <span className="absolute -right-2 -top-2 text-5xl opacity-20">💬</span>
+              <div className="relative text-[11px] font-medium uppercase tracking-wide text-amber-100">Consultas pendientes</div>
+              <div className="relative mt-1 text-3xl font-bold">{pendientes}</div>
             </div>
-            <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-              <div className="h-1.5 bg-gradient-to-r from-emerald-400 to-emerald-600" />
-              <div className="p-4">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">Papeles validados</div>
-                <div className="mt-1 text-2xl font-bold text-emerald-600">{validados}/{stock.length}</div>
-              </div>
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 p-4 text-white shadow-lg shadow-emerald-200">
+              <span className="absolute -right-2 -top-2 text-5xl opacity-20">✓</span>
+              <div className="relative text-[11px] font-medium uppercase tracking-wide text-emerald-100">Papeles validados</div>
+              <div className="relative mt-1 text-3xl font-bold">{validados}/{stock.length}</div>
             </div>
           </section>
 
           <section id="cedula" className="scroll-mt-20 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-            <div className="border-l-4 border-blue-500 p-4 sm:p-5">
+            <div className="p-4 sm:p-5">
               <div className="mb-1 flex flex-wrap items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-100 text-sm">📷</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-sm shadow-sm shadow-blue-200">📷</span>
                 <h2 className="text-sm font-semibold">Cargar 1 vehículo por foto de cédula</h2>
                 <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">simulado en esta demo</span>
               </div>
@@ -265,9 +257,9 @@ export default function StockPage() {
           </section>
 
           <section id="csv" className="scroll-mt-20 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-            <div className="border-l-4 border-violet-500 p-4 sm:p-5">
+            <div className="p-4 sm:p-5">
               <div className="mb-1 flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-100 text-sm">📄</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 text-sm shadow-sm shadow-violet-200">📄</span>
                 <h2 className="text-sm font-semibold">Cargar stock por planilla (CSV)</h2>
               </div>
               <div className="flex flex-wrap items-center gap-3 sm:ml-9">
@@ -309,9 +301,9 @@ export default function StockPage() {
           </section>
 
           <section id="stock" className="scroll-mt-20 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-            <div className="border-l-4 border-emerald-500 p-4 sm:p-5">
+            <div className="p-4 sm:p-5">
               <div className="mb-3 flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-sm">🚗</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-sm shadow-sm shadow-emerald-200">🚗</span>
                 <h2 className="text-sm font-semibold">Stock actual</h2>
                 <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">{stock.length} vehículo(s)</span>
               </div>
@@ -346,9 +338,9 @@ export default function StockPage() {
           </section>
 
           <section id="consultas" className="scroll-mt-20 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-            <div className="border-l-4 border-amber-500 p-4 sm:p-5">
+            <div className="p-4 sm:p-5">
               <div className="mb-1 flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-100 text-sm">💬</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-sm shadow-sm shadow-amber-200">💬</span>
                 <h2 className="text-sm font-semibold">Consultas de compradores</h2>
                 <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">{leads.length} consulta(s)</span>
               </div>
