@@ -30,6 +30,16 @@ export type Vehiculo = {
   fotos: string[];
 };
 
+export type Agencia = {
+  id: string;
+  razon_social: string;
+  cuit: string;
+  contacto_nombre: string;
+  contacto_email: string;
+  contacto_telefono: string;
+  fecha_alta: string;
+};
+
 export type Lead = {
   id: string;
   dominio: string;
@@ -135,6 +145,17 @@ function asegurarTablas(): Promise<void> {
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_nombre TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_domicilio TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_dni TEXT NOT NULL DEFAULT ''`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS agencias (
+          id TEXT PRIMARY KEY,
+          razon_social TEXT NOT NULL,
+          cuit TEXT NOT NULL,
+          contacto_nombre TEXT NOT NULL,
+          contacto_email TEXT NOT NULL,
+          contacto_telefono TEXT NOT NULL DEFAULT '',
+          fecha_alta TEXT NOT NULL
+        )
+      `;
       await sql`
         CREATE TABLE IF NOT EXISTS leads (
           id TEXT PRIMARY KEY,
@@ -259,6 +280,44 @@ export async function registrarVista(dominio: string): Promise<Vehiculo | null> 
     UPDATE stock SET vistas_reales = vistas_reales + 1 WHERE dominio = ${dominio} RETURNING *
   `;
   return filas[0] ? filaAVehiculo(filas[0]) : null;
+}
+
+export async function crearAgencia(datos: {
+  razon_social: string;
+  cuit: string;
+  contacto_nombre: string;
+  contacto_email: string;
+  contacto_telefono: string;
+}): Promise<Agencia> {
+  await asegurarTablas();
+  const agencia: Agencia = {
+    id: Math.random().toString(36).slice(2, 12),
+    razon_social: datos.razon_social.trim(),
+    cuit: datos.cuit.trim(),
+    contacto_nombre: datos.contacto_nombre.trim(),
+    contacto_email: datos.contacto_email.trim(),
+    contacto_telefono: datos.contacto_telefono.trim(),
+    fecha_alta: new Date().toISOString().slice(0, 10),
+  };
+  await sql`
+    INSERT INTO agencias (id, razon_social, cuit, contacto_nombre, contacto_email, contacto_telefono, fecha_alta)
+    VALUES (${agencia.id}, ${agencia.razon_social}, ${agencia.cuit}, ${agencia.contacto_nombre}, ${agencia.contacto_email}, ${agencia.contacto_telefono}, ${agencia.fecha_alta})
+  `;
+  return agencia;
+}
+
+export async function listarAgencias(): Promise<Agencia[]> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM agencias ORDER BY fecha_alta DESC`;
+  return filas.map((r) => ({
+    id: r.id as string,
+    razon_social: r.razon_social as string,
+    cuit: r.cuit as string,
+    contacto_nombre: r.contacto_nombre as string,
+    contacto_email: r.contacto_email as string,
+    contacto_telefono: (r.contacto_telefono as string) || "",
+    fecha_alta: r.fecha_alta as string,
+  }));
 }
 
 export async function crearLead(dominio: string, nombre: string, mensaje: string, telefono?: string): Promise<Lead> {
