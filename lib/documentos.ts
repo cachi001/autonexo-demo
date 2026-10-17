@@ -6,14 +6,19 @@
 export type CategoriaVehiculo = "automotor" | "moto" | "acoplado" | "camion";
 
 // El campo `tipo` del vehículo es texto libre (lo escribe la agencia o lo
-// trae un CSV) -> se normaliza por coincidencia de substring, no por un
-// enum cerrado. "Automotor" es el default si no matchea ninguna otra
-// categoría (es el caso más común: auto, camioneta, SUV, etc.).
+// trae un CSV) -> se normaliza por palabra completa, NO por substring: un
+// `includes("MOTO")` ingenuo clasificaría mal "AUTOMOTOR" como motovehículo,
+// porque esa palabra contiene "moto" en el medio (au-to-MOTO-r). Por eso acá
+// se parte el tipo en tokens alfabéticos y se compara por prefijo de token,
+// así "AUTOMOTOR" no matchea pero "MOTOCICLETA"/"MOTOVEHICULO"/"MOTO" sí.
+// "Automotor" es el default si no matchea ninguna otra categoría (el caso
+// más común: auto, camioneta, SUV, etc.).
 export function categorizarVehiculo(tipo: string): CategoriaVehiculo {
-  const t = (tipo || "").toUpperCase();
-  if (t.includes("MOTO")) return "moto";
-  if (t.includes("ACOPLADO") || t.includes("SEMI")) return "acoplado";
-  if (t.includes("CAMION") || t.includes("CAMIÓN")) return "camion";
+  const tokens = (tipo || "").toUpperCase().split(/[^A-ZÁÉÍÓÚÑ]+/).filter(Boolean);
+  const tieneToken = (prefijo: string) => tokens.some((t) => t.startsWith(prefijo));
+  if (tieneToken("MOTO")) return "moto";
+  if (tieneToken("ACOPLADO") || tieneToken("SEMI")) return "acoplado";
+  if (tieneToken("CAMION") || tieneToken("CAMIÓN")) return "camion";
   return "automotor";
 }
 
@@ -41,7 +46,7 @@ const COMUNES: DocumentoDef[] = [
   {
     key: "libre_deuda_atm",
     label: "Libre deuda de patente (ATM Mendoza)",
-    ayuda: "Lo descarga el vendedor desde atm.mendoza.gov.ar con su propio CUIT y clave — la agencia no puede consultarlo. Solo evidencia, sin validación automática.",
+    ayuda: "Lo descarga el vendedor desde atm.mendoza.gov.ar (necesita su CUIT y clave).",
   },
   { key: "comprobante_seguro", label: "Comprobante de seguro vigente" },
 ];
