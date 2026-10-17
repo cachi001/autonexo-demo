@@ -47,9 +47,20 @@ export type Agencia = {
   id: string;
   razon_social: string;
   cuit: string;
+  // contacto_nombre es solo el nombre de pila; el apellido va aparte.
   contacto_nombre: string;
+  contacto_apellido: string;
   contacto_email: string;
+  // Campo viejo, se mantiene por compatibilidad hacia atrás (no se borra),
+  // pero ya no se pide en el alta -> los datos reales del celular/fijo
+  // viven en las columnas de abajo, que son las que pide el formulario
+  // real "Obtener Informe Web" de la DNRPA (sección "Datos del solicitante").
   contacto_telefono: string;
+  celular_codigo_area: string;
+  celular_numero: string;
+  celular_operador: string;
+  telefono_fijo_codigo_area: string;
+  telefono_fijo_numero: string;
   fecha_alta: string;
 };
 
@@ -192,6 +203,17 @@ function asegurarTablas(): Promise<void> {
           fecha_alta TEXT NOT NULL
         )
       `;
+      // Mismos campos que pide el formulario real "Obtener Informe Web" de
+      // la DNRPA (sección "Datos del solicitante") -> se agregan acá para
+      // que el día que se automatice ese trámite, el perfil de la agencia
+      // ya tenga los datos cargados. La tabla agencias ya existe en
+      // producción desde antes -> hace falta ALTER TABLE explícito.
+      await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS contacto_apellido TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS celular_codigo_area TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS celular_numero TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS celular_operador TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS telefono_fijo_codigo_area TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS telefono_fijo_numero TEXT NOT NULL DEFAULT ''`;
       await sql`
         CREATE TABLE IF NOT EXISTS leads (
           id TEXT PRIMARY KEY,
@@ -341,26 +363,66 @@ export async function registrarVista(dominio: string): Promise<Vehiculo | null> 
   return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
+function filaAAgencia(r: Record<string, unknown>): Agencia {
+  return {
+    id: r.id as string,
+    razon_social: r.razon_social as string,
+    cuit: r.cuit as string,
+    contacto_nombre: r.contacto_nombre as string,
+    contacto_apellido: (r.contacto_apellido as string) || "",
+    contacto_email: r.contacto_email as string,
+    contacto_telefono: (r.contacto_telefono as string) || "",
+    celular_codigo_area: (r.celular_codigo_area as string) || "",
+    celular_numero: (r.celular_numero as string) || "",
+    celular_operador: (r.celular_operador as string) || "",
+    telefono_fijo_codigo_area: (r.telefono_fijo_codigo_area as string) || "",
+    telefono_fijo_numero: (r.telefono_fijo_numero as string) || "",
+    fecha_alta: r.fecha_alta as string,
+  };
+}
+
 export async function crearAgencia(datos: {
   razon_social: string;
   cuit: string;
   contacto_nombre: string;
+  contacto_apellido?: string;
   contacto_email: string;
-  contacto_telefono: string;
+  contacto_telefono?: string;
+  celular_codigo_area?: string;
+  celular_numero?: string;
+  celular_operador?: string;
+  telefono_fijo_codigo_area?: string;
+  telefono_fijo_numero?: string;
 }): Promise<Agencia> {
   await asegurarTablas();
+  const celularCodigoArea = (datos.celular_codigo_area || "").trim();
+  const celularNumero = (datos.celular_numero || "").trim();
   const agencia: Agencia = {
     id: Math.random().toString(36).slice(2, 12),
     razon_social: datos.razon_social.trim(),
     cuit: datos.cuit.trim(),
     contacto_nombre: datos.contacto_nombre.trim(),
+    contacto_apellido: (datos.contacto_apellido || "").trim(),
     contacto_email: datos.contacto_email.trim(),
-    contacto_telefono: datos.contacto_telefono.trim(),
+    // Si no viene un teléfono "viejo" explícito, se deriva del celular
+    // nuevo para no dejar el campo de compatibilidad vacío.
+    contacto_telefono: (datos.contacto_telefono || `${celularCodigoArea} ${celularNumero}`).trim(),
+    celular_codigo_area: celularCodigoArea,
+    celular_numero: celularNumero,
+    celular_operador: (datos.celular_operador || "").trim(),
+    telefono_fijo_codigo_area: (datos.telefono_fijo_codigo_area || "").trim(),
+    telefono_fijo_numero: (datos.telefono_fijo_numero || "").trim(),
     fecha_alta: new Date().toISOString().slice(0, 10),
   };
   await sql`
-    INSERT INTO agencias (id, razon_social, cuit, contacto_nombre, contacto_email, contacto_telefono, fecha_alta)
-    VALUES (${agencia.id}, ${agencia.razon_social}, ${agencia.cuit}, ${agencia.contacto_nombre}, ${agencia.contacto_email}, ${agencia.contacto_telefono}, ${agencia.fecha_alta})
+    INSERT INTO agencias (
+      id, razon_social, cuit, contacto_nombre, contacto_apellido, contacto_email, contacto_telefono,
+      celular_codigo_area, celular_numero, celular_operador, telefono_fijo_codigo_area, telefono_fijo_numero, fecha_alta
+    )
+    VALUES (
+      ${agencia.id}, ${agencia.razon_social}, ${agencia.cuit}, ${agencia.contacto_nombre}, ${agencia.contacto_apellido}, ${agencia.contacto_email}, ${agencia.contacto_telefono},
+      ${agencia.celular_codigo_area}, ${agencia.celular_numero}, ${agencia.celular_operador}, ${agencia.telefono_fijo_codigo_area}, ${agencia.telefono_fijo_numero}, ${agencia.fecha_alta}
+    )
   `;
   return agencia;
 }
@@ -368,15 +430,62 @@ export async function crearAgencia(datos: {
 export async function listarAgencias(): Promise<Agencia[]> {
   await asegurarTablas();
   const filas = await sql`SELECT * FROM agencias ORDER BY fecha_alta DESC`;
-  return filas.map((r) => ({
-    id: r.id as string,
-    razon_social: r.razon_social as string,
-    cuit: r.cuit as string,
-    contacto_nombre: r.contacto_nombre as string,
-    contacto_email: r.contacto_email as string,
-    contacto_telefono: (r.contacto_telefono as string) || "",
-    fecha_alta: r.fecha_alta as string,
-  }));
+  return filas.map(filaAAgencia);
+}
+
+export async function obtenerAgencia(id: string): Promise<Agencia | undefined> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM agencias WHERE id = ${id}`;
+  return filas[0] ? filaAAgencia(filas[0]) : undefined;
+}
+
+export async function actualizarAgencia(
+  id: string,
+  datos: Partial<{
+    razon_social: string;
+    cuit: string;
+    contacto_nombre: string;
+    contacto_apellido: string;
+    contacto_email: string;
+    celular_codigo_area: string;
+    celular_numero: string;
+    celular_operador: string;
+    telefono_fijo_codigo_area: string;
+    telefono_fijo_numero: string;
+  }>
+): Promise<Agencia | null> {
+  await asegurarTablas();
+  const actual = await obtenerAgencia(id);
+  if (!actual) return null;
+  const nueva: Agencia = {
+    ...actual,
+    razon_social: datos.razon_social?.trim() ?? actual.razon_social,
+    cuit: datos.cuit?.trim() ?? actual.cuit,
+    contacto_nombre: datos.contacto_nombre?.trim() ?? actual.contacto_nombre,
+    contacto_apellido: datos.contacto_apellido?.trim() ?? actual.contacto_apellido,
+    contacto_email: datos.contacto_email?.trim() ?? actual.contacto_email,
+    celular_codigo_area: datos.celular_codigo_area?.trim() ?? actual.celular_codigo_area,
+    celular_numero: datos.celular_numero?.trim() ?? actual.celular_numero,
+    celular_operador: datos.celular_operador?.trim() ?? actual.celular_operador,
+    telefono_fijo_codigo_area: datos.telefono_fijo_codigo_area?.trim() ?? actual.telefono_fijo_codigo_area,
+    telefono_fijo_numero: datos.telefono_fijo_numero?.trim() ?? actual.telefono_fijo_numero,
+  };
+  const filas = await sql`
+    UPDATE agencias SET
+      razon_social = ${nueva.razon_social},
+      cuit = ${nueva.cuit},
+      contacto_nombre = ${nueva.contacto_nombre},
+      contacto_apellido = ${nueva.contacto_apellido},
+      contacto_email = ${nueva.contacto_email},
+      celular_codigo_area = ${nueva.celular_codigo_area},
+      celular_numero = ${nueva.celular_numero},
+      celular_operador = ${nueva.celular_operador},
+      telefono_fijo_codigo_area = ${nueva.telefono_fijo_codigo_area},
+      telefono_fijo_numero = ${nueva.telefono_fijo_numero}
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return filas[0] ? filaAAgencia(filas[0]) : null;
 }
 
 export async function crearLead(dominio: string, nombre: string, mensaje: string, telefono?: string): Promise<Lead> {

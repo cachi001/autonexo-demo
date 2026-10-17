@@ -5,17 +5,38 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, ArrowRight, ArrowLeft } from "lucide-react";
 
+const OPERADORES = ["Claro", "Movistar", "Personal"];
+
 export default function RegistroPage() {
   const router = useRouter();
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
+
   const [razonSocial, setRazonSocial] = useState("");
   const [cuit, setCuit] = useState("");
-  const [contactoNombre, setContactoNombre] = useState("");
-  const [contactoEmail, setContactoEmail] = useState("");
-  const [contactoTelefono, setContactoTelefono] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [apellido, setApellido] = useState("");
+  const [email, setEmail] = useState("");
+  const [repetirEmail, setRepetirEmail] = useState("");
+  const [celularCodigoArea, setCelularCodigoArea] = useState("");
+  const [celularNumero, setCelularNumero] = useState("");
+  const [celularOperador, setCelularOperador] = useState("");
+  const [fijoCodigoArea, setFijoCodigoArea] = useState("");
+  const [fijoNumero, setFijoNumero] = useState("");
 
-  const faltanDatos = !razonSocial.trim() || !cuit.trim() || !contactoNombre.trim() || !contactoEmail.trim();
+  const emailsNoCoinciden = repetirEmail.trim() !== "" && email.trim() !== repetirEmail.trim();
+
+  const faltanDatos =
+    !razonSocial.trim() ||
+    !cuit.trim() ||
+    !nombre.trim() ||
+    !apellido.trim() ||
+    !email.trim() ||
+    !repetirEmail.trim() ||
+    emailsNoCoinciden ||
+    !celularCodigoArea.trim() ||
+    !celularNumero.trim() ||
+    !celularOperador;
 
   async function activar() {
     setEnviando(true);
@@ -27,9 +48,14 @@ export default function RegistroPage() {
         body: JSON.stringify({
           razon_social: razonSocial,
           cuit,
-          contacto_nombre: contactoNombre,
-          contacto_email: contactoEmail,
-          contacto_telefono: contactoTelefono,
+          contacto_nombre: nombre,
+          contacto_apellido: apellido,
+          contacto_email: email,
+          celular_codigo_area: celularCodigoArea,
+          celular_numero: celularNumero,
+          celular_operador: celularOperador,
+          telefono_fijo_codigo_area: fijoCodigoArea,
+          telefono_fijo_numero: fijoNumero,
         }),
       });
       if (!res.ok) throw new Error();
@@ -75,54 +101,134 @@ export default function RegistroPage() {
         <h1 className="mb-1 text-xl font-bold">Activá tu cuenta</h1>
         <p className="mb-6 text-sm text-zinc-500">No se cobra nada durante los primeros 30 días.</p>
 
-        <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-6">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-zinc-600">Razón social *</label>
-            <input
-              value={razonSocial}
-              onChange={(e) => setRazonSocial(e.target.value)}
-              placeholder="Ej: AutoMadero S.R.L."
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-zinc-600">CUIT *</label>
-            <input
-              value={cuit}
-              onChange={(e) => setCuit(e.target.value)}
-              placeholder="30-12345678-9"
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-5 rounded-2xl border border-zinc-200 bg-white p-6">
+          <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-600">Tu nombre *</label>
+              <label className="mb-1 block text-xs font-semibold text-zinc-600">Razón social *</label>
               <input
-                value={contactoNombre}
-                onChange={(e) => setContactoNombre(e.target.value)}
-                placeholder="Nombre y apellido"
+                value={razonSocial}
+                onChange={(e) => setRazonSocial(e.target.value)}
+                placeholder="Ej: AutoMadero S.R.L."
                 className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-zinc-600">Email *</label>
+              <label className="mb-1 block text-xs font-semibold text-zinc-600">CUIT *</label>
               <input
-                type="email"
-                value={contactoEmail}
-                onChange={(e) => setContactoEmail(e.target.value)}
-                placeholder="tu@agencia.com"
+                value={cuit}
+                onChange={(e) => setCuit(e.target.value)}
+                placeholder="30-12345678-9"
                 className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
               />
             </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-zinc-600">Teléfono / WhatsApp</label>
-            <input
-              value={contactoTelefono}
-              onChange={(e) => setContactoTelefono(e.target.value)}
-              placeholder="+54 9 261..."
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-            />
+
+          <div className="border-t border-zinc-100 pt-4">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">Datos del solicitante</div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Nombre *</label>
+                <input
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Nombre"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Apellido *</label>
+                <input
+                  value={apellido}
+                  onChange={(e) => setApellido(e.target.value)}
+                  placeholder="Apellido"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Email *</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="tu@agencia.com"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Repetir email *</label>
+                <input
+                  type="email"
+                  value={repetirEmail}
+                  onChange={(e) => setRepetirEmail(e.target.value)}
+                  placeholder="tu@agencia.com"
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-blue-500 ${
+                    emailsNoCoinciden ? "border-red-400" : "border-zinc-300"
+                  }`}
+                />
+                {emailsNoCoinciden && <p className="mt-1 text-xs text-red-600">Los emails no coinciden.</p>}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-zinc-100 pt-4">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">Teléfono celular *</div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Código de área</label>
+                <input
+                  value={celularCodigoArea}
+                  onChange={(e) => setCelularCodigoArea(e.target.value)}
+                  placeholder="0261"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Número</label>
+                <input
+                  value={celularNumero}
+                  onChange={(e) => setCelularNumero(e.target.value)}
+                  placeholder="15123456"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Operador</label>
+                <select
+                  value={celularOperador}
+                  onChange={(e) => setCelularOperador(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                >
+                  <option value="">Elegí uno</option>
+                  {OPERADORES.map((op) => (
+                    <option key={op} value={op}>{op}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-zinc-100 pt-4">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">Teléfono fijo (opcional)</div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Código de área</label>
+                <input
+                  value={fijoCodigoArea}
+                  onChange={(e) => setFijoCodigoArea(e.target.value)}
+                  placeholder="0261"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Número</label>
+                <input
+                  value={fijoNumero}
+                  onChange={(e) => setFijoNumero(e.target.value)}
+                  placeholder="4123456"
+                  className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
