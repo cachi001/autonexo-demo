@@ -117,7 +117,7 @@ export default function FichaVehiculoPage({ params }: { params: Promise<{ domini
             {confirmado ? (
               <div className="flex gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-relaxed text-emerald-700">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
-                <span>Tu consulta fue enviada a la agencia. Todavía no está confirmada ni respondida — un vendedor la va a revisar y te va a contactar directamente. Autoclick no vende el auto ni confirma nada en tu nombre.</span>
+                <span>Tu consulta fue enviada a la agencia. Todavía no está confirmada ni respondida — un vendedor la va a revisar y te va a contactar directamente. AutoNexo no vende el auto ni confirma nada en tu nombre.</span>
               </div>
             ) : (
               <div>

@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
       titular_nombre: f.datos.titular_nombre || "",
       titular_domicilio: f.datos.titular_domicilio || "",
       titular_dni: f.datos.titular_dni || "",
+      libre_deuda_atm: f.datos.libre_deuda_atm || "",
     });
     if (v) agregados.push(v);
   }

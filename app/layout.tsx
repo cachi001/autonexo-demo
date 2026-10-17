@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Autoclick — Prototipo",
-  description: "Demo de gestión de agencia y catálogo para Autoclick",
+  title: "AutoNexo — Prototipo",
+  description: "Demo de gestión de agencia y catálogo para AutoNexo",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

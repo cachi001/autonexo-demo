@@ -24,6 +24,11 @@ export type Vehiculo = {
   titular_nombre: string;
   titular_domicilio: string;
   titular_dni: string;
+  // Comprobante de "libre deuda de patente" que el VENDEDOR descarga de su
+  // propia cuenta en atm.mendoza.gov.ar (requiere su CUIT y clave, por eso
+  // lo sube él, la agencia no puede consultarlo) -> es solo evidencia
+  // cargada, igual que una foto, sin OCR ni validación automática.
+  libre_deuda_atm: string;
   documentacion_validada: boolean;
   documentacion_validada_fecha: string | null;
   vistas_reales: number;
@@ -65,6 +70,7 @@ const SEED_STOCK: Vehiculo[] = [
     titular_nombre: "",
     titular_domicilio: "",
     titular_dni: "",
+    libre_deuda_atm: "",
     documentacion_validada: true,
     documentacion_validada_fecha: "2026-10-12",
     vistas_reales: 3,
@@ -84,6 +90,7 @@ const SEED_STOCK: Vehiculo[] = [
     titular_nombre: "",
     titular_domicilio: "",
     titular_dni: "",
+    libre_deuda_atm: "",
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
@@ -103,6 +110,7 @@ const SEED_STOCK: Vehiculo[] = [
     titular_nombre: "",
     titular_domicilio: "",
     titular_dni: "",
+    libre_deuda_atm: "",
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
@@ -132,6 +140,7 @@ function asegurarTablas(): Promise<void> {
           titular_nombre TEXT NOT NULL DEFAULT '',
           titular_domicilio TEXT NOT NULL DEFAULT '',
           titular_dni TEXT NOT NULL DEFAULT '',
+          libre_deuda_atm TEXT NOT NULL DEFAULT '',
           documentacion_validada BOOLEAN NOT NULL DEFAULT FALSE,
           documentacion_validada_fecha TEXT,
           vistas_reales INTEGER NOT NULL DEFAULT 0,
@@ -145,6 +154,7 @@ function asegurarTablas(): Promise<void> {
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_nombre TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_domicilio TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_dni TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS libre_deuda_atm TEXT NOT NULL DEFAULT ''`;
       await sql`
         CREATE TABLE IF NOT EXISTS agencias (
           id TEXT PRIMARY KEY,
@@ -171,8 +181,8 @@ function asegurarTablas(): Promise<void> {
       if (count === 0) {
         for (const v of SEED_STOCK) {
           await sql`
-            INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
-            VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.documentacion_validada}, ${v.documentacion_validada_fecha}, ${v.vistas_reales}, ${JSON.stringify(v.fotos)})
+            INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
+            VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, ${v.documentacion_validada}, ${v.documentacion_validada_fecha}, ${v.vistas_reales}, ${JSON.stringify(v.fotos)})
           `;
         }
       }
@@ -196,6 +206,7 @@ function filaAVehiculo(r: Record<string, unknown>): Vehiculo {
     titular_nombre: (r.titular_nombre as string) || "",
     titular_domicilio: (r.titular_domicilio as string) || "",
     titular_dni: (r.titular_dni as string) || "",
+    libre_deuda_atm: (r.libre_deuda_atm as string) || "",
     documentacion_validada: r.documentacion_validada as boolean,
     documentacion_validada_fecha: r.documentacion_validada_fecha as string | null,
     vistas_reales: r.vistas_reales as number,
@@ -234,8 +245,8 @@ export async function agregarVehiculo(
   const existente = await sql`SELECT dominio FROM stock WHERE dominio = ${v.dominio}`;
   if (existente.length > 0) return null;
   await sql`
-    INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
-    VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, FALSE, NULL, 0, '[]'::jsonb)
+    INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
+    VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, FALSE, NULL, 0, '[]'::jsonb)
   `;
   return {
     ...v,
