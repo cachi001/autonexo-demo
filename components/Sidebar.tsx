@@ -21,7 +21,7 @@ export default function SidebarContent({ onNavigate }: { onNavigate?: () => void
       <div className="flex items-center gap-2 border-b border-white/10 px-6 py-5">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-sm font-bold text-zinc-900">A</div>
         <div>
-          <div className="text-sm font-bold tracking-tight text-white">Autos<span className="text-blue-400">click</span></div>
+          <div className="text-sm font-bold tracking-tight text-white">Auto<span className="text-blue-400">Nexo</span></div>
           <div className="text-[10px] text-zinc-400">Panel de agencia</div>
         </div>
       </div>

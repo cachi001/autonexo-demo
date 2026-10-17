@@ -5,7 +5,7 @@ export default function Home() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 px-4 py-12 text-center text-zinc-900 sm:px-6">
       <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-xl font-bold text-white shadow-sm">A</div>
       <div className="mb-2 text-xl font-bold tracking-tight">
-        Autos<span className="text-blue-600">click</span>
+        Auto<span className="text-blue-600">Nexo</span>
       </div>
       <h1 className="mb-3 max-w-xl text-xl font-bold sm:text-2xl">Prototipo — gestión de agencia y catálogo</h1>
       <p className="mb-8 max-w-md text-sm text-zinc-500">

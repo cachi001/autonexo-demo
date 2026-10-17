@@ -38,7 +38,7 @@ export default function CatalogoPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">A</div>
-            <div className="text-sm font-bold tracking-tight">Autos<span className="text-blue-600">click</span></div>
+            <div className="text-sm font-bold tracking-tight">Auto<span className="text-blue-600">Nexo</span></div>
           </div>
           <Link href="/stock" className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 sm:text-sm">
             Panel de agencia →
