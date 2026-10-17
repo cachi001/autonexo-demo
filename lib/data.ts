@@ -29,11 +29,19 @@ export type Vehiculo = {
   // lo sube él, la agencia no puede consultarlo) -> es solo evidencia
   // cargada, igual que una foto, sin OCR ni validación automática.
   libre_deuda_atm: string;
+  // Checklist de documentación por tipo de vehículo (ver lib/documentos.ts):
+  // cada clave es un DocumentoKey, el valor es solo evidencia cargada (sin
+  // OCR ni validación automática), igual que libre_deuda_atm de arriba.
+  // libre_deuda_atm (la columna TEXT vieja) se migra acá automáticamente la
+  // primera vez que se lee el vehículo -> esta es la fuente de verdad nueva.
+  documentos: Record<string, { nombre: string; dataUrl: string } | undefined>;
   documentacion_validada: boolean;
   documentacion_validada_fecha: string | null;
   vistas_reales: number;
   fotos: string[];
 };
+
+export type DocumentoVehiculo = { nombre: string; dataUrl: string };
 
 export type Agencia = {
   id: string;
@@ -71,6 +79,7 @@ const SEED_STOCK: Vehiculo[] = [
     titular_domicilio: "",
     titular_dni: "",
     libre_deuda_atm: "",
+    documentos: {},
     documentacion_validada: true,
     documentacion_validada_fecha: "2026-10-12",
     vistas_reales: 3,
@@ -91,6 +100,7 @@ const SEED_STOCK: Vehiculo[] = [
     titular_domicilio: "",
     titular_dni: "",
     libre_deuda_atm: "",
+    documentos: {},
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
@@ -111,6 +121,7 @@ const SEED_STOCK: Vehiculo[] = [
     titular_domicilio: "",
     titular_dni: "",
     libre_deuda_atm: "",
+    documentos: {},
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
@@ -141,6 +152,7 @@ function asegurarTablas(): Promise<void> {
           titular_domicilio TEXT NOT NULL DEFAULT '',
           titular_dni TEXT NOT NULL DEFAULT '',
           libre_deuda_atm TEXT NOT NULL DEFAULT '',
+          documentos JSONB NOT NULL DEFAULT '{}'::jsonb,
           documentacion_validada BOOLEAN NOT NULL DEFAULT FALSE,
           documentacion_validada_fecha TEXT,
           vistas_reales INTEGER NOT NULL DEFAULT 0,
@@ -155,6 +167,20 @@ function asegurarTablas(): Promise<void> {
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_domicilio TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_dni TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS libre_deuda_atm TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS documentos JSONB NOT NULL DEFAULT '{}'::jsonb`;
+      // La ficha del stock ahora muestra el libre deuda ATM como un
+      // documento más de la checklist (en vez de un campo aparte cargado
+      // desde el wizard de cédula) -> se migra una sola vez lo que ya
+      // hubiera en la columna vieja a la columna documentos nueva. El
+      // WHERE hace que sea un no-op en las corridas siguientes.
+      await sql`
+        UPDATE stock
+        SET documentos = jsonb_set(
+          documentos, '{libre_deuda_atm}',
+          jsonb_build_object('nombre', 'Libre deuda (migrado del wizard de cédula)', 'dataUrl', libre_deuda_atm)
+        )
+        WHERE libre_deuda_atm <> '' AND (documentos -> 'libre_deuda_atm') IS NULL
+      `;
       await sql`
         CREATE TABLE IF NOT EXISTS agencias (
           id TEXT PRIMARY KEY,
@@ -181,8 +207,8 @@ function asegurarTablas(): Promise<void> {
       if (count === 0) {
         for (const v of SEED_STOCK) {
           await sql`
-            INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
-            VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, ${v.documentacion_validada}, ${v.documentacion_validada_fecha}, ${v.vistas_reales}, ${JSON.stringify(v.fotos)})
+            INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentos, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
+            VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, ${JSON.stringify(v.documentos)}::jsonb, ${v.documentacion_validada}, ${v.documentacion_validada_fecha}, ${v.vistas_reales}, ${JSON.stringify(v.fotos)})
           `;
         }
       }
@@ -207,6 +233,7 @@ function filaAVehiculo(r: Record<string, unknown>): Vehiculo {
     titular_domicilio: (r.titular_domicilio as string) || "",
     titular_dni: (r.titular_dni as string) || "",
     libre_deuda_atm: (r.libre_deuda_atm as string) || "",
+    documentos: (r.documentos as Record<string, { nombre: string; dataUrl: string } | undefined>) || {},
     documentacion_validada: r.documentacion_validada as boolean,
     documentacion_validada_fecha: r.documentacion_validada_fecha as string | null,
     vistas_reales: r.vistas_reales as number,
@@ -239,22 +266,43 @@ export async function buscarVehiculo(dominio: string): Promise<Vehiculo | undefi
 }
 
 export async function agregarVehiculo(
-  v: Omit<Vehiculo, "documentacion_validada" | "documentacion_validada_fecha" | "vistas_reales" | "fotos">
+  v: Omit<Vehiculo, "documentos" | "documentacion_validada" | "documentacion_validada_fecha" | "vistas_reales" | "fotos">
 ): Promise<Vehiculo | null> {
   await asegurarTablas();
   const existente = await sql`SELECT dominio FROM stock WHERE dominio = ${v.dominio}`;
   if (existente.length > 0) return null;
   await sql`
-    INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
-    VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, FALSE, NULL, 0, '[]'::jsonb)
+    INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentos, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
+    VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, '{}'::jsonb, FALSE, NULL, 0, '[]'::jsonb)
   `;
   return {
     ...v,
+    documentos: {},
     documentacion_validada: false,
     documentacion_validada_fecha: null,
     vistas_reales: 0,
     fotos: [],
   };
+}
+
+// Sube o reemplaza un documento de la checklist (ver lib/documentos.ts).
+// documento = null borra el slot. Igual que agregarFotos/quitarFoto: solo
+// evidencia cargada, sin OCR ni validación automática del contenido.
+export async function setDocumentoVehiculo(
+  dominio: string,
+  clave: string,
+  documento: DocumentoVehiculo | null
+): Promise<Vehiculo | null> {
+  await asegurarTablas();
+  const actual = await buscarVehiculo(dominio);
+  if (!actual) return null;
+  const documentos = { ...actual.documentos };
+  if (documento) documentos[clave] = documento;
+  else delete documentos[clave];
+  const filas = await sql`
+    UPDATE stock SET documentos = ${JSON.stringify(documentos)}::jsonb WHERE dominio = ${dominio} RETURNING *
+  `;
+  return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
 export async function agregarFotos(dominio: string, fotosBase64: string[]): Promise<Vehiculo | null> {

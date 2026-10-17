@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Upload, ArrowLeft, ArrowRight, Loader2, AlertTriangle, CheckCircle2, User, X, ZoomIn,
-  FileText,
 } from "lucide-react";
 
 type DiagnosticoCedula = {
@@ -87,17 +86,6 @@ export default function CargarPorCedulaPage() {
   const [guardando, setGuardando] = useState(false);
   const [imagenAmpliada, setImagenAmpliada] = useState<string | null>(null);
 
-  // --- Libre deuda ATM (sube el vendedor, solo evidencia, sin validar) ---
-  const [libreDeudaAtm, setLibreDeudaAtm] = useState<string | null>(null);
-  const [nombreLibreDeuda, setNombreLibreDeuda] = useState<string | null>(null);
-
-  function elegirLibreDeuda(f: File) {
-    setNombreLibreDeuda(f.name);
-    const reader = new FileReader();
-    reader.onload = () => setLibreDeudaAtm(reader.result as string);
-    reader.readAsDataURL(f);
-  }
-
   function elegirFrente(f: File) {
     setFileFrente(f);
     setPreviewFrente(URL.createObjectURL(f));
@@ -151,7 +139,6 @@ export default function CargarPorCedulaPage() {
       titular_nombre: titular?.nombre || "",
       titular_domicilio: titular?.domicilio || "",
       titular_dni: titular?.dni || "",
-      libre_deuda_atm: libreDeudaAtm || "",
     };
     const obligatorios = ["dominio", "marca", "modelo", "anio", "precio"];
     const faltan = obligatorios.filter((c) => !datosFinales[c]);
@@ -385,28 +372,10 @@ export default function CargarPorCedulaPage() {
                 </label>
               </div>
 
-              <div className="mt-4 border-t border-zinc-200 pt-4">
-                <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  <FileText className="h-3.5 w-3.5" strokeWidth={2} /> Libre deuda de patente (ATM Mendoza) — opcional
-                </div>
-                <p className="mb-2 text-xs text-zinc-500">
-                  Lo descarga el vendedor desde su propia cuenta en atm.mendoza.gov.ar (necesita su CUIT y
-                  clave personal, por eso no lo puede pedir la agencia). Solo se guarda como respaldo —no
-                  se valida automáticamente.
-                </p>
-                <label className={`flex cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm ${
-                  libreDeudaAtm ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-zinc-300 text-zinc-500 hover:border-blue-400 hover:text-blue-600"
-                }`}>
-                  {libreDeudaAtm ? <CheckCircle2 className="h-4 w-4" strokeWidth={2} /> : <Upload className="h-4 w-4" strokeWidth={2} />}
-                  {libreDeudaAtm ? `Cargado — ${nombreLibreDeuda}` : "Pendiente — subir PDF o foto del libre deuda"}
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    className="hidden"
-                    onChange={(e) => e.target.files?.[0] && elegirLibreDeuda(e.target.files[0])}
-                  />
-                </label>
-              </div>
+              <p className="mt-4 border-t border-zinc-200 pt-3 text-xs text-zinc-400">
+                El libre deuda de patente (ATM Mendoza) y el resto de la documentación se cargan
+                después, desde la ficha del vehículo en el stock.
+              </p>
 
               {error && (
                 <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">

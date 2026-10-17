@@ -2,11 +2,15 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, AlertTriangle } from "lucide-react";
+import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, AlertTriangle, ClipboardList, FileText } from "lucide-react";
+import { categorizarVehiculo, DOCUMENTOS_POR_CATEGORIA, LABEL_CATEGORIA } from "@/lib/documentos";
+
+type DocumentoVehiculo = { nombre: string; dataUrl: string };
 
 type Vehiculo = {
   dominio: string; marca: string; modelo: string; anio: string; tipo: string;
   precio: string; km: string; color: string; descripcion: string;
+  documentos: Record<string, DocumentoVehiculo | undefined>;
   documentacion_validada: boolean; documentacion_validada_fecha: string | null;
   vistas_reales: number; consultas_reales: number; fotos: string[];
 };
@@ -50,6 +54,9 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   const [consultandoDnrpa, setConsultandoDnrpa] = useState(false);
   const [errorDnrpa, setErrorDnrpa] = useState("");
   const [resultadoDnrpa, setResultadoDnrpa] = useState<ResultadoDNRPA | null>(null);
+
+  // --- Documentación requerida por tipo de vehículo (solo evidencia, sin OCR) ---
+  const [subiendoDoc, setSubiendoDoc] = useState<string | null>(null);
 
   async function pedirCaptchaDnrpa() {
     setCargandoCaptcha(true);
@@ -124,6 +131,24 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
     cargar();
   }
 
+  async function subirDocumento(clave: string, file: File) {
+    setSubiendoDoc(clave);
+    const fd = new FormData();
+    fd.append("clave", clave);
+    fd.append("archivo", file);
+    await fetch(`/api/stock/${encodeURIComponent(dominio)}/documentos`, { method: "POST", body: fd });
+    setSubiendoDoc(null);
+    cargar();
+  }
+
+  async function quitarDocumento(clave: string) {
+    await fetch(`/api/stock/${encodeURIComponent(dominio)}/documentos`, {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clave }),
+    });
+    cargar();
+  }
+
   if (notFound) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-10">
@@ -134,6 +159,10 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   if (!vehiculo) return null;
 
   const fotos = vehiculo.fotos || [];
+  const categoria = categorizarVehiculo(vehiculo.tipo);
+  const docsRequeridos = DOCUMENTOS_POR_CATEGORIA[categoria];
+  const documentos = vehiculo.documentos || {};
+  const docsCargados = docsRequeridos.filter((d) => documentos[d.key]).length;
 
   return (
     <>
@@ -329,6 +358,8 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
                 <div><span className="text-zinc-400">Localidad</span><div className="font-medium text-zinc-800">{resultadoDnrpa.localidad || "—"}</div></div>
                 <div><span className="text-zinc-400">Provincia</span><div className="font-medium text-zinc-800">{resultadoDnrpa.provincia || "—"}</div></div>
                 <div className="col-span-2 sm:col-span-3"><span className="text-zinc-400">Dirección</span><div className="font-medium text-zinc-800">{resultadoDnrpa.direccion || "—"}</div></div>
+                <div><span className="text-zinc-400">Código Postal</span><div className="font-medium text-zinc-800">{resultadoDnrpa.codigoPostal || "—"}</div></div>
+                <div><span className="text-zinc-400">Teléfono del registro</span><div className="font-medium text-zinc-800">{resultadoDnrpa.telefono || "—"}</div></div>
                 <div><span className="text-zinc-400">Consultado</span><div className="font-medium text-zinc-800">{resultadoDnrpa.fechaConsulta || "—"}</div></div>
               </div>
               <button
@@ -339,6 +370,68 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
               </button>
             </div>
           )}
+        </div>
+
+        {/* Documentación requerida según el tipo de vehículo — solo evidencia cargada, sin OCR ni validación automática */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-zinc-700" strokeWidth={2} />
+            <h2 className="text-sm font-semibold">Documentación del vehículo</h2>
+            <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
+              {LABEL_CATEGORIA[categoria]}
+            </span>
+            <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${
+              docsCargados === docsRequeridos.length ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+            }`}>
+              {docsCargados}/{docsRequeridos.length} cargados
+            </span>
+          </div>
+          <p className="mb-3 text-xs text-zinc-500">
+            Checklist según el tipo de vehículo. Cada documento es solo evidencia de respaldo —
+            sin OCR ni validación automática del contenido.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {docsRequeridos.map((d) => {
+              const doc = documentos[d.key];
+              const subiendo = subiendoDoc === d.key;
+              return (
+                <div key={d.key} className="flex flex-col justify-between rounded-lg border border-zinc-200 p-3">
+                  <div className="flex items-start gap-2">
+                    {doc ? (
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2} />
+                    ) : (
+                      <FileText className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" strokeWidth={2} />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-zinc-800">{d.label}</div>
+                      {d.ayuda && <div className="mt-0.5 text-[11px] leading-snug text-zinc-400">{d.ayuda}</div>}
+                      <div className={`mt-1 truncate text-xs font-medium ${doc ? "text-emerald-700" : "text-zinc-400"}`}>
+                        {doc ? `Cargado — ${doc.nombre}` : "Pendiente — subir PDF o foto"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <label className={`flex cursor-pointer items-center gap-1.5 text-xs font-semibold ${subiendo ? "text-zinc-400" : "text-blue-600 hover:text-blue-700"}`}>
+                      {subiendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} /> : <Upload className="h-3.5 w-3.5" strokeWidth={2} />}
+                      {doc ? "Reemplazar" : "Subir archivo"}
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="hidden"
+                        disabled={subiendo}
+                        onChange={(e) => e.target.files?.[0] && subirDocumento(d.key, e.target.files[0])}
+                      />
+                    </label>
+                    {doc && (
+                      <button onClick={() => quitarDocumento(d.key)} className="text-xs font-medium text-zinc-400 underline hover:text-red-600">
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </main>
     </>
