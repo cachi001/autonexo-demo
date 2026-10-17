@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { Camera, CheckCircle2, Upload, X, Loader2 } from "lucide-react";
+import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, AlertTriangle } from "lucide-react";
 
 type Vehiculo = {
   dominio: string; marca: string; modelo: string; anio: string; tipo: string;
@@ -10,6 +10,26 @@ type Vehiculo = {
   documentacion_validada: boolean; documentacion_validada_fecha: string | null;
   vistas_reales: number; consultas_reales: number; fotos: string[];
 };
+
+type ResultadoDNRPA = {
+  dominio: string;
+  tipoVehiculo: string;
+  registroSeccional: string;
+  direccion: string;
+  localidad: string;
+  provincia: string;
+  codigoPostal: string;
+  telefono: string;
+  fechaConsulta: string;
+};
+
+function normalizar(s: string) {
+  return s.trim().toUpperCase();
+}
+function coincide(declarado: string, dnrpa: string) {
+  if (!declarado || !dnrpa) return null;
+  return normalizar(declarado) === normalizar(dnrpa);
+}
 
 function formatoPrecio(p: string) {
   const n = parseFloat(p);
@@ -22,6 +42,51 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   const [fotoActiva, setFotoActiva] = useState(0);
   const [subiendo, setSubiendo] = useState(false);
   const [notFound, setNotFound] = useState(false);
+
+  // --- Validación DNRPA (Radicación por Patente, semi-asistida por captcha) ---
+  const [captchaImagen, setCaptchaImagen] = useState<string | null>(null);
+  const [codigoVerificador, setCodigoVerificador] = useState("");
+  const [cargandoCaptcha, setCargandoCaptcha] = useState(false);
+  const [consultandoDnrpa, setConsultandoDnrpa] = useState(false);
+  const [errorDnrpa, setErrorDnrpa] = useState("");
+  const [resultadoDnrpa, setResultadoDnrpa] = useState<ResultadoDNRPA | null>(null);
+
+  async function pedirCaptchaDnrpa() {
+    setCargandoCaptcha(true);
+    setErrorDnrpa("");
+    setResultadoDnrpa(null);
+    setCodigoVerificador("");
+    try {
+      const res = await fetch("/api/dnrpa/captcha");
+      const data = await res.json();
+      if (data.error) { setErrorDnrpa(data.error); setCaptchaImagen(null); }
+      else setCaptchaImagen(data.captchaImage);
+    } catch {
+      setErrorDnrpa("No se pudo conectar con la DNRPA. Probá de nuevo.");
+    } finally {
+      setCargandoCaptcha(false);
+    }
+  }
+
+  async function consultarDnrpa() {
+    if (!vehiculo?.dominio || !codigoVerificador.trim()) return;
+    setConsultandoDnrpa(true);
+    setErrorDnrpa("");
+    try {
+      const res = await fetch("/api/dnrpa/consultar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dominio: vehiculo.dominio, codigoVerificador: codigoVerificador.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) { setErrorDnrpa(data.error); setResultadoDnrpa(null); }
+      else { setResultadoDnrpa(data); setCaptchaImagen(null); }
+    } catch {
+      setErrorDnrpa("No se pudo conectar con la DNRPA. Probá de nuevo.");
+    } finally {
+      setConsultandoDnrpa(false);
+    }
+  }
 
   async function cargar() {
     const res = await fetch("/api/stock");
@@ -153,6 +218,127 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
               {vehiculo.documentacion_validada ? "✓ Papeles validados — quitar validación" : "Marcar papeles como validados"}
             </button>
           </div>
+        </div>
+
+        {/* Validación cruzada con la fuente oficial y gratuita de la DNRPA */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-1 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-zinc-700" strokeWidth={2} />
+            <h2 className="text-sm font-semibold">Validar con la DNRPA (oficial y gratis)</h2>
+          </div>
+          <p className="mb-3 text-xs text-zinc-500">
+            Consulta el mismo formulario público de "Radicación por Patente" de dnrpa.gov.ar que
+            usaría cualquiera a mano. No es automático: tiene un captcha, así que alguien de la
+            agencia tiene que leerlo y escribirlo una vez por consulta.
+          </p>
+
+          {!resultadoDnrpa && (
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+              {!captchaImagen && !cargandoCaptcha && (
+                <button
+                  onClick={pedirCaptchaDnrpa}
+                  className="flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+                >
+                  <ShieldCheck className="h-4 w-4" strokeWidth={2} /> Pedir captcha de la DNRPA
+                </button>
+              )}
+
+              {cargandoCaptcha && (
+                <div className="flex items-center gap-2 text-sm text-zinc-500">
+                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} /> Conectando con dnrpa.gov.ar...
+                </div>
+              )}
+
+              {captchaImagen && !cargandoCaptcha && (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <img src={captchaImagen} alt="Captcha de la DNRPA" className="h-11 w-auto rounded border border-zinc-300 bg-white" />
+                  <button
+                    onClick={pedirCaptchaDnrpa}
+                    title="Pedir otro código"
+                    className="flex w-fit items-center gap-1 text-xs font-medium text-zinc-500 underline hover:text-zinc-700"
+                  >
+                    <RefreshCw className="h-3 w-3" strokeWidth={2} /> Pedir otro código
+                  </button>
+                  <input
+                    value={codigoVerificador}
+                    onChange={(e) => setCodigoVerificador(e.target.value)}
+                    placeholder="Código verificador"
+                    className="w-40 rounded-md border border-zinc-300 bg-white px-2.5 py-2 text-sm text-zinc-900"
+                  />
+                  <button
+                    onClick={consultarDnrpa}
+                    disabled={!codigoVerificador.trim() || consultandoDnrpa}
+                    className="flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+                  >
+                    {consultandoDnrpa && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />}
+                    Consultar
+                  </button>
+                </div>
+              )}
+
+              {errorDnrpa && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} /> {errorDnrpa}
+                </div>
+              )}
+            </div>
+          )}
+
+          {resultadoDnrpa && (
+            <div className="space-y-3">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400">
+                    <th className="pb-1 font-semibold">Campo</th>
+                    <th className="pb-1 font-semibold">Declarado</th>
+                    <th className="pb-1 font-semibold">DNRPA</th>
+                    <th className="pb-1 font-semibold"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {([
+                    ["Dominio", vehiculo.dominio || "", resultadoDnrpa.dominio],
+                    ["Tipo de vehículo", vehiculo.tipo || "", resultadoDnrpa.tipoVehiculo],
+                  ] as [string, string, string][]).map(([label, declarado, dnrpa]) => {
+                    const ok = coincide(declarado, dnrpa);
+                    return (
+                      <tr key={label}>
+                        <td className="py-1.5 pr-2 font-semibold text-zinc-600">{label}</td>
+                        <td className="py-1.5 pr-2 text-zinc-800">{declarado || "—"}</td>
+                        <td className="py-1.5 pr-2 text-zinc-800">{dnrpa || "—"}</td>
+                        <td className="py-1.5">
+                          {ok === null ? (
+                            <span className="text-xs text-zinc-400">sin dato</span>
+                          ) : ok ? (
+                            <span className="flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} /> Coincide
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-xs font-semibold text-red-600">
+                              <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2} /> No coincide
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-zinc-50 p-3 text-xs text-zinc-600 sm:grid-cols-3">
+                <div><span className="text-zinc-400">Registro Seccional</span><div className="font-medium text-zinc-800">{resultadoDnrpa.registroSeccional || "—"}</div></div>
+                <div><span className="text-zinc-400">Localidad</span><div className="font-medium text-zinc-800">{resultadoDnrpa.localidad || "—"}</div></div>
+                <div><span className="text-zinc-400">Provincia</span><div className="font-medium text-zinc-800">{resultadoDnrpa.provincia || "—"}</div></div>
+                <div className="col-span-2 sm:col-span-3"><span className="text-zinc-400">Dirección</span><div className="font-medium text-zinc-800">{resultadoDnrpa.direccion || "—"}</div></div>
+                <div><span className="text-zinc-400">Consultado</span><div className="font-medium text-zinc-800">{resultadoDnrpa.fechaConsulta || "—"}</div></div>
+              </div>
+              <button
+                onClick={() => { setResultadoDnrpa(null); pedirCaptchaDnrpa(); }}
+                className="text-xs font-medium text-zinc-500 underline hover:text-zinc-700"
+              >
+                Volver a consultar
+              </button>
+            </div>
+          )}
         </div>
       </main>
     </>
