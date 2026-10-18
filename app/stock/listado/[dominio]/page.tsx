@@ -523,25 +523,26 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
           {mmDesafio && (
             <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
               <p className="mb-2 text-sm font-medium text-zinc-700">{mmDesafio.prompt}</p>
-              <img
-                src={`data:image/png;base64,${mmDesafio.imagen_b64}`}
-                alt="Captcha visual de la DNRPA"
-                className="w-full max-w-sm rounded border border-zinc-300"
-              />
-              <p className="mt-2 text-[11px] text-zinc-400">Tocá los recuadros que correspondan, en el mismo orden que en la imagen (izquierda a derecha, arriba a abajo).</p>
-              <div className={`mt-2 grid max-w-sm gap-1.5 ${mmDesafio.celdas === 16 ? "grid-cols-4" : "grid-cols-3"}`}>
-                {Array.from({ length: mmDesafio.celdas }, (_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => toggleCelda(i)}
-                    className={`rounded-md border py-2 text-xs font-semibold ${
-                      mmSeleccion.has(i) ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-100"
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+              <div className="relative w-full max-w-sm">
+                <img
+                  src={`data:image/png;base64,${mmDesafio.imagen_b64}`}
+                  alt="Captcha visual de la DNRPA"
+                  className="w-full rounded border border-zinc-300"
+                />
+                <div className={`absolute inset-0 grid ${mmDesafio.celdas === 16 ? "grid-cols-4 grid-rows-4" : "grid-cols-3 grid-rows-3"}`}>
+                  {Array.from({ length: mmDesafio.celdas }, (_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => toggleCelda(i)}
+                      aria-label={`Recuadro ${i + 1}`}
+                      className={`border border-white/40 transition-colors ${
+                        mmSeleccion.has(i) ? "bg-emerald-500/40" : "hover:bg-white/20"
+                      }`}
+                    />
+                  ))}
+                </div>
               </div>
+              <p className="mt-2 text-[11px] text-zinc-400">Tocá directo sobre la imagen los recuadros que correspondan.</p>
               <button
                 onClick={enviarSeleccionCaptcha}
                 disabled={mmCargando}
