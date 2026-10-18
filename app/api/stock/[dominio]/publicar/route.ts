@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buscarVehiculo, listarAgencias, obtenerCanalConectado, setPublicacion, Canal } from "@/lib/data";
 import { publicarItem } from "@/lib/mercadolibre";
+import { publicarEnFacebook, publicarEnInstagram } from "@/lib/meta";
 
 // Publicación explícita a un canal externo -nunca automática (principio P7:
 // "la IA propone, la persona aprueba" para irreversibles, extendido acá a
@@ -48,8 +49,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
     return NextResponse.json({ ok: true, publicacion: pub, permalink: resultado.permalink });
   }
 
-  // Instagram/Facebook: arquitectura lista (tabla, estados, UI), falta la
-  // integración real con Meta (Graph API + Catálogo de Commerce) -no se
-  // simula un resultado falso, se avisa explícitamente que falta conectar.
-  return NextResponse.json({ error: `${canal} todavía no está conectado -falta la integración con Meta.` }, { status: 501 });
+  if (canal === "facebook" || canal === "instagram") {
+    const conectado = await obtenerCanalConectado(agencia.id, canal);
+    if (!conectado) {
+      return NextResponse.json({ error: `${canal} no está conectado. Conectalo en Canales externos.` }, { status: 400 });
+    }
+    if (vehiculo.fotos.length === 0) {
+      return NextResponse.json({ error: "El vehículo no tiene fotos cargadas -hace falta al menos una para publicar." }, { status: 400 });
+    }
+    await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "pendiente_aprobacion" });
+    const imagenUrl = `${req.nextUrl.origin}/api/stock/${encodeURIComponent(vehiculo.dominio)}/fotos/0`;
+    const mensaje = `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio} — $${vehiculo.precio}\n\n${vehiculo.descripcion}`;
+
+    const resultado =
+      canal === "facebook"
+        ? await publicarEnFacebook(conectado.cuenta_externa_id, conectado.access_token, imagenUrl, mensaje)
+        : await publicarEnInstagram(conectado.cuenta_externa_id, conectado.access_token, imagenUrl, mensaje);
+
+    if (!resultado.ok) {
+      const pub = await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "error", error_msg: resultado.error });
+      return NextResponse.json({ error: resultado.error, publicacion: pub }, { status: 502 });
+    }
+    const pub = await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "publicado", external_id: resultado.externalId });
+    return NextResponse.json({ ok: true, publicacion: pub });
+  }
+
+  return NextResponse.json({ error: `Canal '${canal}' no reconocido.` }, { status: 400 });
 }

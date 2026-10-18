@@ -13,10 +13,10 @@ type CanalConectado = {
 
 type Agencia = { id: string; razon_social: string };
 
-const CANALES: { id: "mercadolibre" | "instagram" | "facebook"; nombre: string; disponible: boolean }[] = [
-  { id: "mercadolibre", nombre: "Mercado Libre", disponible: true },
-  { id: "instagram", nombre: "Instagram", disponible: false },
-  { id: "facebook", nombre: "Facebook", disponible: false },
+const CANALES: { id: "mercadolibre" | "instagram" | "facebook"; nombre: string; conectarVia: string }[] = [
+  { id: "mercadolibre", nombre: "Mercado Libre", conectarVia: "mercadolibre" },
+  { id: "facebook", nombre: "Facebook", conectarVia: "meta" },
+  { id: "instagram", nombre: "Instagram", conectarVia: "meta" },
 ];
 
 export default function CanalesPage() {
@@ -109,8 +109,6 @@ function CanalesPageInterna() {
                       <div className="text-sm font-semibold text-zinc-800">{c.nombre}</div>
                       {conectado ? (
                         <div className="text-xs text-emerald-700">Conectado — {conectado.cuenta_externa_nombre}</div>
-                      ) : !c.disponible ? (
-                        <div className="text-xs text-zinc-400">Próximamente</div>
                       ) : (
                         <div className="text-xs text-zinc-400">No conectado</div>
                       )}
@@ -123,17 +121,13 @@ function CanalesPageInterna() {
                     >
                       Desconectar
                     </button>
-                  ) : c.disponible ? (
+                  ) : (
                     <a
-                      href={`/api/canales/${c.id}/conectar?agenciaId=${encodeURIComponent(agencia.id)}`}
+                      href={`/api/canales/${c.conectarVia}/conectar?agenciaId=${encodeURIComponent(agencia.id)}`}
                       className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
                     >
                       Conectar
                     </a>
-                  ) : (
-                    <button disabled className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-300">
-                      Conectar
-                    </button>
                   )}
                 </div>
               );
