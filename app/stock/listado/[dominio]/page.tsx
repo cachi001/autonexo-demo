@@ -78,7 +78,6 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   const [agencia, setAgencia] = useState<Agencia | null>(null);
   const [mmSessionId, setMmSessionId] = useState<string | null>(null);
   const [mmDesafio, setMmDesafio] = useState<DesafioCaptcha | null>(null);
-  const [mmSeleccion, setMmSeleccion] = useState<Set<number>>(new Set());
   const [mmCargando, setMmCargando] = useState(false);
   const [mmError, setMmError] = useState("");
   const [mmResultado, setMmResultado] = useState<ResultadoMarcaModelo | null>(null);
@@ -137,7 +136,6 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   function resetMarcaModelo() {
     setMmSessionId(null);
     setMmDesafio(null);
-    setMmSeleccion(new Set());
     setMmError("");
     setMmResultado(null);
     setMmAplicado(false);
@@ -176,26 +174,40 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
     }
   }
 
-  function toggleCelda(i: number) {
-    setMmSeleccion((prev) => {
-      const nuevo = new Set(prev);
-      if (nuevo.has(i)) nuevo.delete(i); else nuevo.add(i);
-      return nuevo;
-    });
+  async function marcarCelda(i: number) {
+    if (!mmSessionId || mmCargando) return;
+    setMmCargando(true);
+    setMmError("");
+    try {
+      const res = await fetch(`${OCR_BACKEND_URL}/dnrpa/informe/captcha/marcar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: mmSessionId, indice: i }),
+      });
+      const data = await res.json();
+      if (data.error) { setMmError(data.error); setMmSessionId(null); setMmDesafio(null); return; }
+      // La imagen que vuelve ya refleja el toque (tilde de Google si quedó
+      // marcada, o una imagen nueva si la reemplazó) — no hace falta guardar
+      // selección aparte, se ve directo en la captura.
+      setMmDesafio(data.desafio);
+    } catch {
+      setMmError("No se pudo conectar con el servicio de validación. Probá de nuevo.");
+    } finally {
+      setMmCargando(false);
+    }
   }
 
-  async function enviarSeleccionCaptcha() {
+  async function verificarCaptcha() {
     if (!mmSessionId) return;
     setMmCargando(true);
     setMmError("");
     try {
-      const res = await fetch(`${OCR_BACKEND_URL}/dnrpa/informe/captcha`, {
+      const res = await fetch(`${OCR_BACKEND_URL}/dnrpa/informe/captcha/verificar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: mmSessionId, indices: Array.from(mmSeleccion) }),
+        body: JSON.stringify({ session_id: mmSessionId }),
       });
       const data = await res.json();
-      setMmSeleccion(new Set());
       if (data.error) { setMmError(data.error); setMmSessionId(null); setMmDesafio(null); return; }
       if (data.resultado) { setMmResultado(data.resultado); setMmSessionId(null); setMmDesafio(null); return; }
       setMmSessionId(data.session_id);
@@ -533,30 +545,31 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
                   {Array.from({ length: mmDesafio.celdas }, (_, i) => (
                     <button
                       key={i}
-                      onClick={() => toggleCelda(i)}
+                      onClick={() => marcarCelda(i)}
                       disabled={mmCargando}
                       aria-label={`Recuadro ${i + 1}`}
-                      className={`border border-white/40 transition-colors ${
-                        mmSeleccion.has(i) ? "bg-emerald-500/40" : "hover:bg-white/20"
-                      }`}
+                      className="border border-white/40 transition-colors hover:bg-white/20"
                     />
                   ))}
                 </div>
                 {mmCargando && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded bg-black/60 text-white">
                     <Loader2 className="h-6 w-6 animate-spin" strokeWidth={2} />
-                    <span className="text-xs font-medium">Verificando con la DNRPA... puede tardar hasta 40s</span>
+                    <span className="text-xs font-medium">Conectando con la DNRPA...</span>
                   </div>
                 )}
               </div>
-              <p className="mt-2 text-[11px] text-zinc-400">Tocá directo sobre la imagen los recuadros que correspondan.</p>
+              <p className="mt-2 text-[11px] text-zinc-400">
+                Tocá directo sobre la imagen cada recuadro que corresponda — se marca al toque, como en la DNRPA real.
+                Cuando ya no quede ninguna (o nunca hubo), tocá Verificar.
+              </p>
               <button
-                onClick={enviarSeleccionCaptcha}
+                onClick={verificarCaptcha}
                 disabled={mmCargando}
                 className="mt-3 flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
               >
                 {mmCargando && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />}
-                {mmSeleccion.size === 0 ? "Omitir (no hay ninguna)" : "Verificar"}
+                Verificar
               </button>
             </div>
           )}
