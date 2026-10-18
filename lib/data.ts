@@ -355,6 +355,18 @@ export async function setDocumentacionValidada(dominio: string, validada: boolea
   return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
+export async function aplicarDatosDnrpa(
+  dominio: string,
+  datos: { marca: string; modelo: string; anio: string }
+): Promise<Vehiculo | null> {
+  await asegurarTablas();
+  const filas = await sql`
+    UPDATE stock SET marca = ${datos.marca}, modelo = ${datos.modelo}, anio = ${datos.anio}
+    WHERE dominio = ${dominio} RETURNING *
+  `;
+  return filas[0] ? filaAVehiculo(filas[0]) : null;
+}
+
 export async function registrarVista(dominio: string): Promise<Vehiculo | null> {
   await asegurarTablas();
   const filas = await sql`
