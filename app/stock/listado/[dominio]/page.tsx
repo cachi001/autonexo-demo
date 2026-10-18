@@ -38,8 +38,7 @@ type Agencia = {
   celular_operador: string;
 };
 
-type DesafioCaptcha = { prompt: string; imagen_b64: string; celdas: number };
-type ResultadoMarcaModelo = { dominio: string; marca: string; modelo: string; anio: string; registro: string };
+type ResultadoMarcaModelo = { dominio: string; marca: string; modelo: string; anio: string; provincia: string };
 
 const OCR_BACKEND_URL = process.env.NEXT_PUBLIC_OCR_BACKEND_URL || "https://autoclick-ocr-backend.onrender.com";
 
@@ -74,11 +73,8 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   // --- Documentación requerida por tipo de vehículo (solo evidencia, sin OCR) ---
   const [subiendoDoc, setSubiendoDoc] = useState<string | null>(null);
 
-  // --- Marca/modelo/año reales (DNRPA "Obtener Informe Web", captcha visual) ---
+  // --- Marca/modelo/año reales (patente.ar, automático, sin captcha) ---
   const [agencia, setAgencia] = useState<Agencia | null>(null);
-  const [mmSessionId, setMmSessionId] = useState<string | null>(null);
-  const [mmDesafio, setMmDesafio] = useState<DesafioCaptcha | null>(null);
-  const [mmSeleccion, setMmSeleccion] = useState<Set<number>>(new Set());
   const [mmCargando, setMmCargando] = useState(false);
   const [mmError, setMmError] = useState("");
   const [mmResultado, setMmResultado] = useState<ResultadoMarcaModelo | null>(null);
@@ -135,87 +131,26 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   }, []);
 
   function resetMarcaModelo() {
-    setMmSessionId(null);
-    setMmDesafio(null);
-    setMmSeleccion(new Set());
     setMmError("");
     setMmResultado(null);
     setMmAplicado(false);
   }
 
-  async function iniciarValidacionMarcaModelo() {
-    if (!vehiculo || !agencia) return;
+  async function validarMarcaModelo() {
+    if (!vehiculo) return;
     resetMarcaModelo();
     setMmCargando(true);
     try {
-      const res = await fetch(`${OCR_BACKEND_URL}/dnrpa/informe/iniciar`, {
+      const res = await fetch(`${OCR_BACKEND_URL}/patente-ar/consultar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cuit: agencia.cuit,
-          dominio: vehiculo.dominio,
-          alta: {
-            apellido: agencia.contacto_apellido,
-            nombre: agencia.contacto_nombre,
-            email: agencia.contacto_email,
-            celular_codigo_area: agencia.celular_codigo_area,
-            celular_numero: agencia.celular_numero,
-            celular_operador: agencia.celular_operador,
-          },
-        }),
+        body: JSON.stringify({ dominio: vehiculo.dominio }),
       });
       const data = await res.json();
-      if (data.error) { setMmError(data.error); return; }
-      if (data.resultado) { setMmResultado(data.resultado); return; }
-      setMmSessionId(data.session_id);
-      setMmDesafio(data.desafio);
+      if (!data.ok) { setMmError(data.error || "No se pudo validar."); return; }
+      setMmResultado(data);
     } catch {
       setMmError("No se pudo conectar con el servicio de validación. Probá de nuevo.");
-    } finally {
-      setMmCargando(false);
-    }
-  }
-
-  async function marcarCelda(i: number) {
-    // Click local e instantáneo, sin red -se manda todo junto recién al
-    // tocar Verificar, para no esperar una respuesta del servidor por cada
-    // toque individual (eso era lo que lo hacía lento y tosco).
-    if (mmCargando) return;
-    setMmSeleccion((prev) => {
-      const nuevo = new Set(prev);
-      if (nuevo.has(i)) nuevo.delete(i); else nuevo.add(i);
-      return nuevo;
-    });
-  }
-
-  async function verificarCaptcha() {
-    if (!mmSessionId) return;
-    setMmCargando(true);
-    setMmError("");
-    try {
-      for (const i of mmSeleccion) {
-        const res = await fetch(`${OCR_BACKEND_URL}/dnrpa/informe/captcha/marcar`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: mmSessionId, indice: i }),
-        });
-        const data = await res.json();
-        if (data.error) { setMmError(data.error); setMmSessionId(null); setMmDesafio(null); setMmSeleccion(new Set()); return; }
-      }
-      setMmSeleccion(new Set());
-      const res = await fetch(`${OCR_BACKEND_URL}/dnrpa/informe/captcha/verificar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: mmSessionId }),
-      });
-      const data = await res.json();
-      if (data.error) { setMmError(data.error); setMmSessionId(null); setMmDesafio(null); return; }
-      if (data.resultado) { setMmResultado(data.resultado); setMmSessionId(null); setMmDesafio(null); return; }
-      setMmSessionId(data.session_id);
-      setMmDesafio(data.desafio);
-    } catch {
-      setMmError("No se pudo conectar con el servicio de validación. Probá de nuevo.");
-      setMmSeleccion(new Set());
     } finally {
       setMmCargando(false);
     }
@@ -505,77 +440,27 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
           )}
         </div>
 
-        {/* Marca/modelo/año reales contra la DNRPA ("Obtener Informe Web") — a diferencia
-            del bloque de arriba, este SÍ trae marca/modelo/año, gratis. El captcha acá es
-            visual (reCAPTCHA de Google), así que en vez de un código se le pide al empleado
-            que toque las imágenes correctas, igual que haría en el sitio de la DNRPA. */}
+        {/* Marca/modelo/año reales vía patente.ar -agregador que incluye datos de la
+            DNRPA y expone la ficha pública sin captcha ni login (robots.txt del sitio
+            permite expresamente el acceso por bots). Automático de punta a punta. */}
         <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-1 flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-zinc-700" strokeWidth={2} />
-            <h2 className="text-sm font-semibold">Marca, modelo y año reales (DNRPA)</h2>
+            <h2 className="text-sm font-semibold">Marca, modelo y año reales</h2>
           </div>
           <p className="mb-3 text-xs text-zinc-500">
-            Trae marca/modelo/año directo de la DNRPA ("Obtener Informe Web"), gratis. Usa los
-            datos de contacto de <Link href="/stock/agencia" className="underline">Datos de la agencia</Link> como
-            solicitante. Tiene un captcha visual: alguien de la agencia tiene que tocar las
-            imágenes correctas una vez por consulta.
+            Trae marca/modelo/año reales (fuente DNRPA vía patente.ar), gratis y automático — sin captcha.
           </p>
 
-          {!agencia && <p className="text-xs text-amber-600">Cargá primero los datos de la agencia para poder validar.</p>}
-
-          {agencia && !mmDesafio && !mmResultado && (
+          {!mmResultado && (
             <button
-              onClick={iniciarValidacionMarcaModelo}
+              onClick={validarMarcaModelo}
               disabled={mmCargando}
               className="flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
             >
               {mmCargando ? <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} /> : <ShieldCheck className="h-4 w-4" strokeWidth={2} />}
-              {mmCargando ? "Conectando con la DNRPA..." : "Validar marca/modelo/año"}
+              {mmCargando ? "Consultando..." : "Validar marca/modelo/año"}
             </button>
-          )}
-
-          {mmDesafio && (
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-              <p className="mb-2 text-sm font-medium text-zinc-700">{mmDesafio.prompt}</p>
-              <div className="relative w-full max-w-sm">
-                <img
-                  src={`data:image/png;base64,${mmDesafio.imagen_b64}`}
-                  alt="Captcha visual de la DNRPA"
-                  className="w-full rounded border border-zinc-300"
-                />
-                <div className={`absolute inset-0 grid ${mmDesafio.celdas === 16 ? "grid-cols-4 grid-rows-4" : "grid-cols-3 grid-rows-3"}`}>
-                  {Array.from({ length: mmDesafio.celdas }, (_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => marcarCelda(i)}
-                      disabled={mmCargando}
-                      aria-label={`Recuadro ${i + 1}`}
-                      className={`border border-white/40 transition-colors ${
-                        mmSeleccion.has(i) ? "bg-emerald-500/50" : "hover:bg-white/20"
-                      }`}
-                    />
-                  ))}
-                </div>
-                {mmCargando && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded bg-black/60 text-white">
-                    <Loader2 className="h-6 w-6 animate-spin" strokeWidth={2} />
-                    <span className="text-xs font-medium">Verificando con la DNRPA...</span>
-                  </div>
-                )}
-              </div>
-              <p className="mt-2 text-[11px] text-zinc-400">
-                Tocá los recuadros que correspondan (se resaltan al toque, sin esperar nada) y después tocá Verificar.
-                Si no hay ninguno, tocá Verificar igual.
-              </p>
-              <button
-                onClick={verificarCaptcha}
-                disabled={mmCargando}
-                className="mt-3 flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
-              >
-                {mmCargando && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />}
-                Verificar
-              </button>
-            </div>
           )}
 
           {mmError && (
@@ -591,14 +476,14 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
           {mmResultado && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
-                <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={2} /> Captcha resuelto — la DNRPA devolvió estos datos
+                <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={2} /> Validado — estos son los datos reales
               </div>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-wide text-zinc-400">
                     <th className="pb-1 font-semibold">Campo</th>
                     <th className="pb-1 font-semibold">Declarado</th>
-                    <th className="pb-1 font-semibold">DNRPA</th>
+                    <th className="pb-1 font-semibold">Real</th>
                     <th className="pb-1 font-semibold"></th>
                   </tr>
                 </thead>
@@ -632,7 +517,7 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
                   })}
                 </tbody>
               </table>
-              <p className="text-xs text-zinc-500">Registro: {mmResultado.registro || "—"}</p>
+              <p className="text-xs text-zinc-500">Radicación: {mmResultado.provincia || "—"}</p>
               <div className="flex items-center gap-3">
                 <button
                   onClick={aplicarMarcaModelo}
