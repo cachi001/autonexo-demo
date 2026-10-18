@@ -64,6 +64,37 @@ export type Agencia = {
   fecha_alta: string;
 };
 
+// Publicación del stock a redes externas (syndication) -ver AutoNexo/discovery/
+// Contraste_AutoFlow_vs_AutoNexo.md §1: el hueco real frente a la competencia
+// era justo esto, con dos reglas no negociables (P7, "la IA propone, la
+// persona aprueba"): nunca se publica solo -siempre hay un botón explícito
+// por canal-, y el estado de cada canal es independiente (un vehículo puede
+// estar publicado en ML y pendiente en Instagram a la vez).
+export type Canal = "mercadolibre" | "instagram" | "facebook";
+
+export type CanalConectado = {
+  id: string;
+  agencia_id: string;
+  canal: Canal;
+  access_token: string;
+  refresh_token: string;
+  expires_at: string;
+  cuenta_externa_id: string;
+  cuenta_externa_nombre: string;
+  conectado_en: string;
+};
+
+export type EstadoPublicacion = "sin_publicar" | "pendiente_aprobacion" | "publicado" | "rechazado" | "pausado" | "error";
+
+export type Publicacion = {
+  dominio: string;
+  canal: Canal;
+  estado: EstadoPublicacion;
+  external_id: string;
+  error_msg: string;
+  actualizado_en: string;
+};
+
 export type Lead = {
   id: string;
   dominio: string;
@@ -214,6 +245,31 @@ function asegurarTablas(): Promise<void> {
       await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS celular_operador TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS telefono_fijo_codigo_area TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS telefono_fijo_numero TEXT NOT NULL DEFAULT ''`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS canales_conectados (
+          id TEXT PRIMARY KEY,
+          agencia_id TEXT NOT NULL,
+          canal TEXT NOT NULL,
+          access_token TEXT NOT NULL DEFAULT '',
+          refresh_token TEXT NOT NULL DEFAULT '',
+          expires_at TEXT NOT NULL DEFAULT '',
+          cuenta_externa_id TEXT NOT NULL DEFAULT '',
+          cuenta_externa_nombre TEXT NOT NULL DEFAULT '',
+          conectado_en TEXT NOT NULL,
+          UNIQUE (agencia_id, canal)
+        )
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS publicaciones (
+          dominio TEXT NOT NULL,
+          canal TEXT NOT NULL,
+          estado TEXT NOT NULL DEFAULT 'sin_publicar',
+          external_id TEXT NOT NULL DEFAULT '',
+          error_msg TEXT NOT NULL DEFAULT '',
+          actualizado_en TEXT NOT NULL,
+          PRIMARY KEY (dominio, canal)
+        )
+      `;
       await sql`
         CREATE TABLE IF NOT EXISTS leads (
           id TEXT PRIMARY KEY,
@@ -536,6 +592,102 @@ export async function contarLeadsPorDominio(): Promise<Record<string, number>> {
   const conteo: Record<string, number> = {};
   for (const f of filas) conteo[f.dominio as string] = f.cantidad as number;
   return conteo;
+}
+
+// --- Canales externos (Mercado Libre, Instagram, Facebook) ---
+
+function filaACanalConectado(r: Record<string, unknown>): CanalConectado {
+  return {
+    id: r.id as string,
+    agencia_id: r.agencia_id as string,
+    canal: r.canal as Canal,
+    access_token: r.access_token as string,
+    refresh_token: r.refresh_token as string,
+    expires_at: r.expires_at as string,
+    cuenta_externa_id: r.cuenta_externa_id as string,
+    cuenta_externa_nombre: r.cuenta_externa_nombre as string,
+    conectado_en: r.conectado_en as string,
+  };
+}
+
+export async function listarCanalesConectados(agenciaId: string): Promise<CanalConectado[]> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM canales_conectados WHERE agencia_id = ${agenciaId}`;
+  return filas.map(filaACanalConectado);
+}
+
+export async function obtenerCanalConectado(agenciaId: string, canal: Canal): Promise<CanalConectado | undefined> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM canales_conectados WHERE agencia_id = ${agenciaId} AND canal = ${canal}`;
+  return filas[0] ? filaACanalConectado(filas[0]) : undefined;
+}
+
+export async function guardarCanalConectado(datos: {
+  agencia_id: string;
+  canal: Canal;
+  access_token: string;
+  refresh_token: string;
+  expires_at: string;
+  cuenta_externa_id: string;
+  cuenta_externa_nombre: string;
+}): Promise<CanalConectado> {
+  await asegurarTablas();
+  const filas = await sql`
+    INSERT INTO canales_conectados (id, agencia_id, canal, access_token, refresh_token, expires_at, cuenta_externa_id, cuenta_externa_nombre, conectado_en)
+    VALUES (${datos.agencia_id + ":" + datos.canal}, ${datos.agencia_id}, ${datos.canal}, ${datos.access_token}, ${datos.refresh_token}, ${datos.expires_at}, ${datos.cuenta_externa_id}, ${datos.cuenta_externa_nombre}, ${new Date().toISOString()})
+    ON CONFLICT (agencia_id, canal) DO UPDATE SET
+      access_token = EXCLUDED.access_token,
+      refresh_token = EXCLUDED.refresh_token,
+      expires_at = EXCLUDED.expires_at,
+      cuenta_externa_id = EXCLUDED.cuenta_externa_id,
+      cuenta_externa_nombre = EXCLUDED.cuenta_externa_nombre,
+      conectado_en = EXCLUDED.conectado_en
+    RETURNING *
+  `;
+  return filaACanalConectado(filas[0]);
+}
+
+export async function desconectarCanal(agenciaId: string, canal: Canal): Promise<void> {
+  await asegurarTablas();
+  await sql`DELETE FROM canales_conectados WHERE agencia_id = ${agenciaId} AND canal = ${canal}`;
+}
+
+function filaAPublicacion(r: Record<string, unknown>): Publicacion {
+  return {
+    dominio: r.dominio as string,
+    canal: r.canal as Canal,
+    estado: r.estado as EstadoPublicacion,
+    external_id: r.external_id as string,
+    error_msg: r.error_msg as string,
+    actualizado_en: r.actualizado_en as string,
+  };
+}
+
+export async function listarPublicaciones(dominio: string): Promise<Publicacion[]> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM publicaciones WHERE dominio = ${dominio}`;
+  return filas.map(filaAPublicacion);
+}
+
+export async function setPublicacion(datos: {
+  dominio: string;
+  canal: Canal;
+  estado: EstadoPublicacion;
+  external_id?: string;
+  error_msg?: string;
+}): Promise<Publicacion> {
+  await asegurarTablas();
+  const filas = await sql`
+    INSERT INTO publicaciones (dominio, canal, estado, external_id, error_msg, actualizado_en)
+    VALUES (${datos.dominio}, ${datos.canal}, ${datos.estado}, ${datos.external_id || ""}, ${datos.error_msg || ""}, ${new Date().toISOString()})
+    ON CONFLICT (dominio, canal) DO UPDATE SET
+      estado = EXCLUDED.estado,
+      external_id = EXCLUDED.external_id,
+      error_msg = EXCLUDED.error_msg,
+      actualizado_en = EXCLUDED.actualizado_en
+    RETURNING *
+  `;
+  return filaAPublicacion(filas[0]);
 }
 
 // --- Validación de planilla (carga masiva) ---

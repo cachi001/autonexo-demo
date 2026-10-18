@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, AlertTriangle, ClipboardList, FileText } from "lucide-react";
+import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, AlertTriangle, ClipboardList, FileText, Share2 } from "lucide-react";
 import { categorizarVehiculo, DOCUMENTOS_POR_CATEGORIA, LABEL_CATEGORIA } from "@/lib/documentos";
 
 type DocumentoVehiculo = { nombre: string; dataUrl: string };
@@ -25,6 +25,23 @@ type ResultadoDNRPA = {
   codigoPostal: string;
   telefono: string;
   fechaConsulta: string;
+};
+
+type Publicacion = { canal: string; estado: string; external_id: string; error_msg: string };
+
+const CANALES = [
+  { id: "mercadolibre", nombre: "Mercado Libre" },
+  { id: "instagram", nombre: "Instagram" },
+  { id: "facebook", nombre: "Facebook" },
+];
+
+const ESTADO_LABEL: Record<string, { texto: string; clase: string }> = {
+  sin_publicar: { texto: "Sin publicar", clase: "bg-zinc-100 text-zinc-500" },
+  pendiente_aprobacion: { texto: "Publicando...", clase: "bg-amber-50 text-amber-700" },
+  publicado: { texto: "Publicado", clase: "bg-emerald-50 text-emerald-700" },
+  rechazado: { texto: "Rechazado", clase: "bg-red-50 text-red-700" },
+  pausado: { texto: "Pausado", clase: "bg-zinc-100 text-zinc-600" },
+  error: { texto: "Error", clase: "bg-red-50 text-red-700" },
 };
 
 function normalizar(s: string) {
@@ -57,6 +74,12 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
 
   // --- Documentación requerida por tipo de vehículo (solo evidencia, sin OCR) ---
   const [subiendoDoc, setSubiendoDoc] = useState<string | null>(null);
+
+  // --- Publicación a canales externos (Mercado Libre, Instagram, Facebook) ---
+  const [canalesConectados, setCanalesConectados] = useState<string[]>([]);
+  const [publicaciones, setPublicaciones] = useState<Publicacion[]>([]);
+  const [publicando, setPublicando] = useState<string | null>(null);
+  const [errorPublicar, setErrorPublicar] = useState("");
 
   async function pedirCaptchaDnrpa() {
     setCargandoCaptcha(true);
@@ -103,6 +126,40 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
     setVehiculo(v);
   }
   useEffect(() => { cargar(); }, [dominio]);
+
+  async function cargarCanalesYPublicaciones() {
+    const resA = await fetch("/api/agencias");
+    const dataA = await resA.json();
+    const agencia = (dataA.agencias || [])[0];
+    if (agencia) {
+      const resC = await fetch(`/api/canales?agenciaId=${encodeURIComponent(agencia.id)}`);
+      const dataC = await resC.json();
+      setCanalesConectados((dataC.canales || []).map((c: { canal: string }) => c.canal));
+    }
+    const resP = await fetch(`/api/stock/${encodeURIComponent(dominio)}/publicaciones`);
+    const dataP = await resP.json();
+    setPublicaciones(dataP.publicaciones || []);
+  }
+  useEffect(() => { cargarCanalesYPublicaciones(); }, [dominio]);
+
+  async function publicarEnCanal(canal: string) {
+    setPublicando(canal);
+    setErrorPublicar("");
+    try {
+      const res = await fetch(`/api/stock/${encodeURIComponent(dominio)}/publicar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canal }),
+      });
+      const data = await res.json();
+      if (data.error) setErrorPublicar(data.error);
+      await cargarCanalesYPublicaciones();
+    } catch {
+      setErrorPublicar("No se pudo conectar con el servicio de publicación. Probá de nuevo.");
+    } finally {
+      setPublicando(null);
+    }
+  }
 
   async function subirFotos(files: FileList) {
     setSubiendo(true);
@@ -370,6 +427,59 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
               </button>
             </div>
           )}
+        </div>
+
+        {/* Publicación a canales externos -nunca automática: botón explícito por
+            canal (principio P7, "la IA propone, la persona aprueba"). */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-1 flex items-center gap-2">
+            <Share2 className="h-4 w-4 text-zinc-700" strokeWidth={2} />
+            <h2 className="text-sm font-semibold">Publicar en redes</h2>
+          </div>
+          <p className="mb-3 text-xs text-zinc-500">
+            Cada canal se publica por separado, con un botón explícito — nunca automático.
+          </p>
+          {errorPublicar && (
+            <div className="mb-3 flex items-start gap-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+              <div className="text-xs">{errorPublicar}</div>
+            </div>
+          )}
+          <div className="space-y-2">
+            {CANALES.map((c) => {
+              const pub = publicaciones.find((p) => p.canal === c.id);
+              const estado = pub?.estado || "sin_publicar";
+              const conectado = canalesConectados.includes(c.id);
+              const label = ESTADO_LABEL[estado] || ESTADO_LABEL.sin_publicar;
+              return (
+                <div key={c.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-3">
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-800">{c.nombre}</div>
+                    <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${label.clase}`}>
+                      {label.texto}
+                    </span>
+                    {estado === "error" && pub?.error_msg && (
+                      <div className="mt-1 text-[11px] text-red-600">{pub.error_msg}</div>
+                    )}
+                  </div>
+                  {!conectado ? (
+                    <Link href="/stock/canales" className="text-xs font-medium text-zinc-500 underline hover:text-zinc-700">
+                      Conectar
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => publicarEnCanal(c.id)}
+                      disabled={publicando === c.id || estado === "publicado"}
+                      className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+                    >
+                      {publicando === c.id && <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />}
+                      {estado === "publicado" ? "✓ Publicado" : publicando === c.id ? "Publicando..." : "Publicar"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Documentación requerida según el tipo de vehículo — solo evidencia cargada, sin OCR ni validación automática */}

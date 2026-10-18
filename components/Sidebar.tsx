@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Camera, FileText, Car, MessageCircle, ShoppingCart, Building2,
+  LayoutDashboard, Camera, FileText, Car, MessageCircle, ShoppingCart, Building2, Share2,
 } from "lucide-react";
 
 const NAV = [
@@ -11,6 +11,7 @@ const NAV = [
   { href: "/stock/cedula", Icon: Camera, label: "Cargar por cédula" },
   { href: "/stock/csv", Icon: FileText, label: "Cargar por planilla" },
   { href: "/stock/listado", Icon: Car, label: "Stock" },
+  { href: "/stock/canales", Icon: Share2, label: "Canales externos" },
   { href: "/stock/consultas", Icon: MessageCircle, label: "Consultas" },
   { href: "/stock/agencia", Icon: Building2, label: "Datos de la agencia" },
 ];
