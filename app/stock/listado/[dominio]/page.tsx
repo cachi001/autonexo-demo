@@ -85,6 +85,14 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   const [mmAplicando, setMmAplicando] = useState(false);
   const [mmAplicado, setMmAplicado] = useState(false);
 
+  // --- Carga manual: el empleado resuelve el trámite en su propio navegador
+  // (pestaña nueva, IP residencial real) y después tipea los 3 datos acá ---
+  const [manualMarca, setManualMarca] = useState("");
+  const [manualModelo, setManualModelo] = useState("");
+  const [manualAnio, setManualAnio] = useState("");
+  const [manualAplicando, setManualAplicando] = useState(false);
+  const [manualAplicado, setManualAplicado] = useState(false);
+
   async function pedirCaptchaDnrpa() {
     setCargandoCaptcha(true);
     setErrorDnrpa("");
@@ -220,6 +228,22 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
       cargar();
     } finally {
       setMmAplicando(false);
+    }
+  }
+
+  async function aplicarManual() {
+    if (!vehiculo || !manualMarca.trim() || !manualModelo.trim()) return;
+    setManualAplicando(true);
+    try {
+      await fetch(`/api/stock/${encodeURIComponent(dominio)}/dnrpa-marca-modelo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ marca: manualMarca.trim(), modelo: manualModelo.trim(), anio: manualAnio.trim() }),
+      });
+      setManualAplicado(true);
+      cargar();
+    } finally {
+      setManualAplicando(false);
     }
   }
 
@@ -501,24 +525,78 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
             <h2 className="text-sm font-semibold">Marca, modelo y año reales (DNRPA)</h2>
           </div>
           <p className="mb-3 text-xs text-zinc-500">
-            Trae marca/modelo/año directo de la DNRPA ("Obtener Informe Web"), gratis. Usa los
-            datos de contacto de <Link href="/stock/agencia" className="underline">Datos de la agencia</Link> como
-            solicitante. Tiene un captcha visual: alguien de la agencia tiene que tocar las
-            imágenes correctas una vez por consulta.
+            Trae marca/modelo/año directo de la DNRPA ("Obtener Informe Web"), gratis.
           </p>
 
-          {!agencia && <p className="text-xs text-amber-600">Cargá primero los datos de la agencia para poder validar.</p>}
-
-          {agencia && !mmDesafio && !mmResultado && (
-            <button
-              onClick={iniciarValidacionMarcaModelo}
-              disabled={mmCargando}
-              className="flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+          {/* Camino recomendado: el propio navegador del empleado (IP residencial real,
+              sin automatización) resuelve el trámite — nunca se traba en un loop de
+              captcha porque no hay nada que delate automatización. */}
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+            <p className="mb-2 text-sm font-medium text-zinc-700">1. Completá el trámite en tu propio navegador</p>
+            <a
+              href="https://www2.jus.gov.ar/dnrpa-site/#!/solicitante"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
             >
-              {mmCargando ? <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} /> : <ShieldCheck className="h-4 w-4" strokeWidth={2} />}
-              {mmCargando ? "Conectando con la DNRPA..." : "Validar marca/modelo/año"}
+              <ShieldCheck className="h-4 w-4" strokeWidth={2} /> Abrir DNRPA en una pestaña nueva
+            </a>
+            <p className="mt-2 text-[11px] leading-snug text-zinc-400">
+              Ahí: "Informes online" → tu CUIT (si pide alta, completá con los datos de{" "}
+              <Link href="/stock/agencia" className="underline">Datos de la agencia</Link>) → patente{" "}
+              <strong>{vehiculo.dominio}</strong>. La DNRPA te muestra Marca/Modelo/Año — copiálos acá abajo.
+            </p>
+
+            <p className="mb-2 mt-4 text-sm font-medium text-zinc-700">2. Cargá lo que te mostró la DNRPA</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <input
+                value={manualMarca}
+                onChange={(e) => { setManualMarca(e.target.value); setManualAplicado(false); }}
+                placeholder="Marca"
+                className="rounded-md border border-zinc-300 bg-white px-2.5 py-2 text-sm text-zinc-900"
+              />
+              <input
+                value={manualModelo}
+                onChange={(e) => { setManualModelo(e.target.value); setManualAplicado(false); }}
+                placeholder="Modelo"
+                className="rounded-md border border-zinc-300 bg-white px-2.5 py-2 text-sm text-zinc-900"
+              />
+              <input
+                value={manualAnio}
+                onChange={(e) => { setManualAnio(e.target.value); setManualAplicado(false); }}
+                placeholder="Año"
+                className="rounded-md border border-zinc-300 bg-white px-2.5 py-2 text-sm text-zinc-900"
+              />
+            </div>
+            <button
+              onClick={aplicarManual}
+              disabled={!manualMarca.trim() || !manualModelo.trim() || manualAplicando || manualAplicado}
+              className="mt-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {manualAplicado ? "✓ Aplicado a la ficha" : manualAplicando ? "Aplicando..." : "Aplicar a la ficha"}
             </button>
-          )}
+          </div>
+
+          {/* Camino automático: puede no cerrar nunca si el captcha visual de Google
+              decide tratar la IP del servidor como riesgosa — por eso queda como
+              alternativa opcional, no como el camino principal. */}
+          <details className="mt-3">
+            <summary className="cursor-pointer text-xs font-medium text-zinc-500 hover:text-zinc-700">
+              O probar el modo automático (puede no terminar nunca, depende de la IP del servidor)
+            </summary>
+            <div className="mt-2">
+              {!agencia && <p className="text-xs text-amber-600">Cargá primero los datos de la agencia para poder validar.</p>}
+
+              {agencia && !mmDesafio && !mmResultado && (
+                <button
+                  onClick={iniciarValidacionMarcaModelo}
+                  disabled={mmCargando}
+                  className="flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  {mmCargando ? <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} /> : <ShieldCheck className="h-4 w-4" strokeWidth={2} />}
+                  {mmCargando ? "Conectando con la DNRPA..." : "Validar marca/modelo/año"}
+                </button>
+              )}
 
           {mmDesafio && (
             <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
@@ -616,6 +694,8 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
               </div>
             </div>
           )}
+            </div>
+          </details>
         </div>
 
         {/* Documentación requerida según el tipo de vehículo — solo evidencia cargada, sin OCR ni validación automática */}
