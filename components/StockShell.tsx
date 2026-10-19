@@ -5,13 +5,13 @@ import { X } from "lucide-react";
 import SidebarContent from "@/components/Sidebar";
 import MobileTabBar from "@/components/MobileTabBar";
 
-export default function StockShell({ children }: { children: React.ReactNode }) {
+export default function StockShell({ children, conError = 0 }: { children: React.ReactNode; conError?: number }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-zinc-50 text-zinc-900">
       <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-zinc-900 lg:flex">
-        <SidebarContent />
+        <SidebarContent conError={conError} />
       </aside>
 
       {menuAbierto && (
@@ -25,14 +25,14 @@ export default function StockShell({ children }: { children: React.ReactNode }) 
             >
               <X className="h-5 w-5" strokeWidth={2} />
             </button>
-            <SidebarContent onNavigate={() => setMenuAbierto(false)} />
+            <SidebarContent conError={conError} onNavigate={() => setMenuAbierto(false)} />
           </aside>
         </div>
       )}
 
       <div className="flex-1 pb-16 lg:pb-0 lg:pl-64">{children}</div>
 
-      <MobileTabBar onMore={() => setMenuAbierto(true)} />
+      <MobileTabBar onMore={() => setMenuAbierto(true)} conError={conError} />
     </div>
   );
 }

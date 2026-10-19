@@ -17,7 +17,13 @@ const NAV = [
   { href: "/stock/agencia", Icon: Building2, label: "Datos de la agencia" },
 ];
 
-export default function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+export default function SidebarContent({
+  onNavigate,
+  conError = 0,
+}: {
+  onNavigate?: () => void;
+  conError?: number;
+}) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -49,7 +55,13 @@ export default function SidebarContent({ onNavigate }: { onNavigate?: () => void
                 active ? "bg-white/10 text-white" : "text-zinc-300 hover:bg-white/5 hover:text-white"
               }`}
             >
-              <item.Icon className="h-4 w-4" strokeWidth={2} />{item.label}
+              <item.Icon className="h-4 w-4" strokeWidth={2} />
+              {item.label}
+              {item.href === "/stock/canales-externos" && conError > 0 && (
+                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">
+                  {conError}
+                </span>
+              )}
             </Link>
           );
         })}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Camera, FileText, Car, MessageCircle, Eye, CheckCircle2, ArrowRight,
+  Camera, FileText, Car, MessageCircle, Eye, CheckCircle2, ArrowRight, AlertTriangle,
 } from "lucide-react";
 
 type Vehiculo = {
@@ -13,14 +13,17 @@ type Vehiculo = {
   vistas_reales: number; consultas_reales: number;
 };
 type Lead = { id: string; dominio: string; nombre: string; telefono: string | null; mensaje: string; fecha: string; estado: string; vehiculo_titulo: string };
+type PublicacionError = { dominio: string; canal: string; marca: string; modelo: string; error_msg: string };
 
 export default function StockPage() {
   const [stock, setStock] = useState<Vehiculo[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [erroresPublicacion, setErroresPublicacion] = useState<PublicacionError[]>([]);
 
   useEffect(() => {
     fetch("/api/stock").then((r) => r.json()).then((d) => setStock(d.vehiculos || []));
     fetch("/api/leads").then((r) => r.json()).then((d) => setLeads(d.leads || []));
+    fetch("/api/publicaciones/errores").then((r) => r.json()).then((d) => setErroresPublicacion(d.errores || []));
   }, []);
 
   const totalVistas = stock.reduce((acc, v) => acc + (v.vistas_reales || 0), 0);
@@ -37,6 +40,26 @@ export default function StockPage() {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:space-y-6 sm:px-6 lg:px-8">
+        {erroresPublicacion.length > 0 && (
+          <Link
+            href="/stock/canales-externos"
+            className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 transition hover:border-red-300"
+          >
+            <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" strokeWidth={2} />
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-red-800">
+                {erroresPublicacion.length === 1
+                  ? "1 publicación necesita tu atención"
+                  : `${erroresPublicacion.length} publicaciones necesitan tu atención`}
+              </div>
+              <div className="truncate text-xs text-red-600">
+                {erroresPublicacion[0].marca} {erroresPublicacion[0].modelo} — {erroresPublicacion[0].error_msg}
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-red-400" strokeWidth={2} />
+          </Link>
+        )}
+
         {/* Stat cards */}
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="relative overflow-hidden rounded-xl bg-blue-600 p-4 text-white shadow-sm">

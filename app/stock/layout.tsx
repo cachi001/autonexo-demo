@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { obtenerSesion } from "@/lib/data";
+import { obtenerSesion, listarPublicacionesDeAgencia } from "@/lib/data";
 import { COOKIE_SESION } from "@/lib/auth";
 import StockShell from "@/components/StockShell";
 
@@ -17,5 +17,13 @@ export default async function StockLayout({ children }: { children: React.ReactN
     redirect("/login");
   }
 
-  return <StockShell>{children}</StockShell>;
+  // Bidireccionalidad real: antes la agencia solo se enteraba de un error de
+  // publicación (ej. precio rechazado por ML) si entraba por su cuenta a
+  // Canales externos -nada se lo avisaba. Este conteo se calcula acá (layout
+  // que envuelve TODO /stock/*) para que el aviso se vea entre en la página
+  // que entre, no solo en Canales externos.
+  const publicaciones = await listarPublicacionesDeAgencia(sesion.agenciaId!);
+  const conError = publicaciones.filter((p) => p.estado === "error").length;
+
+  return <StockShell conError={conError}>{children}</StockShell>;
 }
