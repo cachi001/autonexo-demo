@@ -12,6 +12,7 @@ import {
 } from "@/lib/data";
 import { COOKIE_SESION } from "@/lib/auth";
 import CanalLogo from "@/components/CanalLogo";
+import VerificarMlBoton from "@/components/VerificarMlBoton";
 import { humanizarError } from "@/lib/errores";
 
 const TODOS_LOS_CANALES: Canal[] = ["mercadolibre", "facebook", "instagram"];
@@ -150,8 +151,17 @@ export default async function CanalesExternosPage() {
                               )}
                             </div>
                             {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
-                              <div className="mt-0.5 max-w-xs whitespace-pre-wrap text-[11px] leading-relaxed text-red-600">
+                              <div
+                                className={`mt-1 max-w-xs text-xs leading-snug font-medium ${
+                                  estado === "en_revision" ? "text-amber-700" : "text-red-600"
+                                }`}
+                              >
                                 {humanizarError(pub.error_msg)}
+                              </div>
+                            )}
+                            {c === "mercadolibre" && pub?.external_id && estado !== "sin_publicar" && (
+                              <div className="mt-1">
+                                <VerificarMlBoton dominio={v.dominio} />
                               </div>
                             )}
                           </td>

@@ -650,7 +650,13 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
                         {label.texto}
                       </span>
                       {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
-                        <div className="mt-1 max-w-xs text-[11px] leading-relaxed whitespace-pre-wrap text-red-600">{humanizarError(pub.error_msg)}</div>
+                        <div
+                          className={`mt-1 max-w-xs text-xs leading-snug font-medium ${
+                            estado === "en_revision" ? "text-amber-700" : "text-red-600"
+                          }`}
+                        >
+                          {humanizarError(pub.error_msg)}
+                        </div>
                       )}
                     </div>
                   </div>

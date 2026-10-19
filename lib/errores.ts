@@ -9,8 +9,7 @@
 const PATRONES: { test: RegExp; texto: string }[] = [
   {
     test: /listing type free is not available/i,
-    texto:
-      "Ya usaste la publicación gratuita de Mercado Libre para vehículos este año (es 1 por cuenta cada 365 días). Para publicar este vehículo hay que elegir un plan pago: Plata ($69.000), Oro ($79.000) o Oro Premium ($99.000).",
+    texto: "Esta cuenta no tiene cupo de publicación gratis disponible en Mercado Libre. Revisá el paquete de publicaciones contratado con ML o elegí un tipo de aviso pago.",
   },
   {
     test: /invalid access token|access token|session has expired|token.*expired/i,

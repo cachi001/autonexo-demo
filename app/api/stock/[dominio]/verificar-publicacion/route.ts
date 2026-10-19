@@ -75,8 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
       dominio: vehiculo.dominio,
       canal: "mercadolibre",
       estado: "en_revision",
-      error_msg:
-        "El aviso está creado en Mercado Libre pero pendiente de pago -no es visible para compradores hasta que se pague o se cancele desde la cuenta real de Mercado Libre.",
+      error_msg: "Pendiente de pago en Mercado Libre -no es visible hasta pagarlo o cancelarlo desde la cuenta de ML.",
     });
     return NextResponse.json({ ok: true, publicacion: pub });
   }

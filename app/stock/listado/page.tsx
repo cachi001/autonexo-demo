@@ -35,11 +35,16 @@ export default function StockListadoPage() {
     fetch("/api/publicaciones").then((r) => r.json()).then((d) => setPublicaciones(d.publicaciones || []));
   }, []);
 
-  // Solo "publicado" es realmente visible al público -"en_revision" quedó
-  // creado en la plataforma pero ML lo tiene oculto, no corresponde mostrar
-  // el logo como si ya estuviera a la vista de un comprador.
-  function canalesPublicados(dominio: string): Canal[] {
-    return publicaciones.filter((p) => p.dominio === dominio && p.estado === "publicado").map((p) => p.canal);
+  // El logo se muestra para cualquier intento real con el canal (publicado,
+  // en revisión o pausado), no solo "publicado" -la agencia necesita ver que
+  // el vehículo tiene una conexión con Mercado Libre aunque todavía no sea
+  // visible al público. El estado exacto (y si de verdad está a la vista de
+  // un comprador) se ve en detalle en Canales externos, acá es solo un
+  // indicador de que existe algo.
+  function canalesConIntento(dominio: string): { canal: Canal; publicado: boolean }[] {
+    return publicaciones
+      .filter((p) => p.dominio === dominio && ["publicado", "en_revision", "pausado"].includes(p.estado))
+      .map((p) => ({ canal: p.canal, publicado: p.estado === "publicado" }));
   }
 
   async function toggleDocumentacion(dominio: string, nuevoEstado: boolean) {
@@ -119,8 +124,12 @@ export default function StockListadoPage() {
                     <td className="p-3">{v.consultas_reales}</td>
                     <td className="p-3">
                       <div className="flex items-center gap-1">
-                        {canalesPublicados(v.dominio).map((c) => <CanalLogo key={c} canal={c} size={16} />)}
-                        {canalesPublicados(v.dominio).length === 0 && <span className="text-xs text-zinc-300">—</span>}
+                        {canalesConIntento(v.dominio).map(({ canal, publicado }) => (
+                          <span key={canal} className={publicado ? "" : "opacity-40"}>
+                            <CanalLogo canal={canal} size={16} />
+                          </span>
+                        ))}
+                        {canalesConIntento(v.dominio).length === 0 && <span className="text-xs text-zinc-300">—</span>}
                       </div>
                     </td>
                     <td className="p-3">
@@ -162,9 +171,13 @@ export default function StockListadoPage() {
                     <span className="flex items-center gap-1"><Eye className="h-3 w-3" strokeWidth={2} /> {v.vistas_reales} vistas</span>
                     <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" strokeWidth={2} /> {v.consultas_reales} consultas</span>
                   </div>
-                  {canalesPublicados(v.dominio).length > 0 && (
+                  {canalesConIntento(v.dominio).length > 0 && (
                     <div className="mt-1.5 flex items-center gap-1">
-                      {canalesPublicados(v.dominio).map((c) => <CanalLogo key={c} canal={c} size={16} />)}
+                      {canalesConIntento(v.dominio).map(({ canal, publicado }) => (
+                        <span key={canal} className={publicado ? "" : "opacity-40"}>
+                          <CanalLogo canal={canal} size={16} />
+                        </span>
+                      ))}
                     </div>
                   )}
                   <button
