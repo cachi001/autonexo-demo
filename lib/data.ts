@@ -94,7 +94,13 @@ export type CanalConectado = {
   conectado_en: string;
 };
 
-export type EstadoPublicacion = "sin_publicar" | "pendiente_aprobacion" | "publicado" | "rechazado" | "pausado" | "error";
+// "en_revision" es distinto de "error": en_revision significa que ML SÍ creó
+// el aviso (hay external_id/permalink reales) pero lo tiene oculto hasta que
+// se corrija algo -ej. precio por debajo del piso de mercado. "error" es un
+// rechazo total, nunca se creó nada en ML. Antes los dos se guardaban como
+// "error" por igual y la agencia no podía distinguir "nunca se publicó" de
+// "se publicó pero está escondido" -encontrado en vivo con el Ford Fiesta.
+export type EstadoPublicacion = "sin_publicar" | "pendiente_aprobacion" | "publicado" | "rechazado" | "pausado" | "error" | "en_revision";
 
 export type Publicacion = {
   dominio: string;
@@ -481,6 +487,14 @@ export async function quitarFoto(dominio: string, agenciaId: string, indice: num
   const fotos = actual.fotos.filter((_, i) => i !== indice);
   await sql`UPDATE stock SET fotos = ${JSON.stringify(fotos)}::jsonb WHERE dominio = ${dominio} AND agencia_id = ${agenciaId}`;
   return { ...actual, fotos };
+}
+
+export async function actualizarPrecio(dominio: string, agenciaId: string, precio: string): Promise<Vehiculo | null> {
+  await asegurarTablas();
+  const filas = await sql`
+    UPDATE stock SET precio = ${precio} WHERE dominio = ${dominio} AND agencia_id = ${agenciaId} RETURNING *
+  `;
+  return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
 export async function setFichaTecnica(

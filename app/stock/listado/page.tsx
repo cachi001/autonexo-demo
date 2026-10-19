@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Camera, CheckCircle2, LayoutGrid, Table2, Eye, MessageCircle } from "lucide-react";
+import CanalLogo from "@/components/CanalLogo";
+import type { Canal } from "@/lib/data";
 
 type Vehiculo = {
   dominio: string; marca: string; modelo: string; anio: string; tipo: string;
@@ -10,6 +12,7 @@ type Vehiculo = {
   documentacion_validada: boolean; documentacion_validada_fecha: string | null;
   vistas_reales: number; consultas_reales: number;
 };
+type Publicacion = { dominio: string; canal: Canal; estado: string };
 
 function formatoPrecio(p: string) {
   const n = parseFloat(p);
@@ -18,6 +21,7 @@ function formatoPrecio(p: string) {
 
 export default function StockListadoPage() {
   const [stock, setStock] = useState<Vehiculo[]>([]);
+  const [publicaciones, setPublicaciones] = useState<Publicacion[]>([]);
   const [vista, setVista] = useState<"tabla" | "cards">("tabla");
   const [filtro, setFiltro] = useState("");
 
@@ -26,7 +30,17 @@ export default function StockListadoPage() {
     const data = await res.json();
     setStock(data.vehiculos || []);
   }
-  useEffect(() => { cargarStock(); }, []);
+  useEffect(() => {
+    cargarStock();
+    fetch("/api/publicaciones").then((r) => r.json()).then((d) => setPublicaciones(d.publicaciones || []));
+  }, []);
+
+  // Solo "publicado" es realmente visible al público -"en_revision" quedó
+  // creado en la plataforma pero ML lo tiene oculto, no corresponde mostrar
+  // el logo como si ya estuviera a la vista de un comprador.
+  function canalesPublicados(dominio: string): Canal[] {
+    return publicaciones.filter((p) => p.dominio === dominio && p.estado === "publicado").map((p) => p.canal);
+  }
 
   async function toggleDocumentacion(dominio: string, nuevoEstado: boolean) {
     await fetch(`/api/stock/${encodeURIComponent(dominio)}/documentacion`, {
@@ -84,6 +98,7 @@ export default function StockListadoPage() {
                   <th className="p-3 text-left">Color</th>
                   <th className="p-3 text-left">Vistas</th>
                   <th className="p-3 text-left">Consultas</th>
+                  <th className="p-3 text-left">Canales</th>
                   <th className="p-3 text-left">Papeles</th>
                 </tr>
               </thead>
@@ -103,6 +118,12 @@ export default function StockListadoPage() {
                     <td className="p-3">{v.vistas_reales}</td>
                     <td className="p-3">{v.consultas_reales}</td>
                     <td className="p-3">
+                      <div className="flex items-center gap-1">
+                        {canalesPublicados(v.dominio).map((c) => <CanalLogo key={c} canal={c} size={16} />)}
+                        {canalesPublicados(v.dominio).length === 0 && <span className="text-xs text-zinc-300">—</span>}
+                      </div>
+                    </td>
+                    <td className="p-3">
                       <button
                         onClick={() => toggleDocumentacion(v.dominio, !v.documentacion_validada)}
                         className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${v.documentacion_validada ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"}`}
@@ -114,7 +135,7 @@ export default function StockListadoPage() {
                   </tr>
                 ))}
                 {filtrado.length === 0 && (
-                  <tr><td colSpan={9} className="p-6 text-center text-sm text-zinc-400">Sin resultados.</td></tr>
+                  <tr><td colSpan={10} className="p-6 text-center text-sm text-zinc-400">Sin resultados.</td></tr>
                 )}
               </tbody>
             </table>
@@ -141,6 +162,11 @@ export default function StockListadoPage() {
                     <span className="flex items-center gap-1"><Eye className="h-3 w-3" strokeWidth={2} /> {v.vistas_reales} vistas</span>
                     <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" strokeWidth={2} /> {v.consultas_reales} consultas</span>
                   </div>
+                  {canalesPublicados(v.dominio).length > 0 && (
+                    <div className="mt-1.5 flex items-center gap-1">
+                      {canalesPublicados(v.dominio).map((c) => <CanalLogo key={c} canal={c} size={16} />)}
+                    </div>
+                  )}
                   <button
                     onClick={() => toggleDocumentacion(v.dominio, !v.documentacion_validada)}
                     className={`mt-2 flex w-full items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-[11px] ${v.documentacion_validada ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"}`}

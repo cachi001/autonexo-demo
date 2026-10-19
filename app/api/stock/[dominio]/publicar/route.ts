@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buscarVehiculo, obtenerCanalConectado, guardarCanalConectado, setPublicacion, Canal } from "@/lib/data";
-import { publicarItem, refrescarToken } from "@/lib/mercadolibre";
+import { buscarVehiculo, obtenerCanalConectado, guardarCanalConectado, listarPublicaciones, setPublicacion, Canal } from "@/lib/data";
+import { publicarItem, actualizarItem, refrescarToken } from "@/lib/mercadolibre";
 import { publicarEnFacebook, publicarEnInstagram } from "@/lib/meta";
 import { agenciaDesdeRequest } from "@/lib/auth";
 
@@ -88,7 +88,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
       dominio: vehiculo.dominio,
       chasis: vehiculo.chasis,
     };
-    let resultado = await publicarItem({ accessToken: conectado.access_token, ...datosItem });
+    // Si ya existe un aviso real de este vehículo en ML (quedó "en revisión"
+    // o con un error pero SÍ tiene external_id), se actualiza ESE mismo
+    // ítem en vez de crear uno nuevo -crear de nuevo duplicaría el auto en
+    // la cuenta real de la agencia. Solo se crea un ítem nuevo la primera
+    // vez o si el intento anterior nunca llegó a crear nada en ML.
+    const publicacionesPrevias = await listarPublicaciones(vehiculo.dominio);
+    const previaMl = publicacionesPrevias.find((p) => p.canal === "mercadolibre" && p.external_id);
+
+    let resultado = previaMl
+      ? await actualizarItem(previaMl.external_id, conectado.access_token, {
+          price: datosItem.precio,
+          title: datosItem.titulo,
+        })
+      : await publicarItem({ accessToken: conectado.access_token, ...datosItem });
     // Red de seguridad además del chequeo de expires_at de arriba: si ML
     // igual rechaza el token (puede invalidarlo antes de la fecha que él
     // mismo dio), se renueva una vez más y se reintenta -nunca más de una
@@ -105,13 +118,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
           cuenta_externa_id: conectado.cuenta_externa_id,
           cuenta_externa_nombre: conectado.cuenta_externa_nombre,
         });
-        resultado = await publicarItem({ accessToken: conectado.access_token, ...datosItem });
+        resultado = previaMl
+          ? await actualizarItem(previaMl.external_id, conectado.access_token, {
+              price: datosItem.precio,
+              title: datosItem.titulo,
+            })
+          : await publicarItem({ accessToken: conectado.access_token, ...datosItem });
       } catch {
         // Si la renovación en sí falla, se informa el error original de ML.
       }
     }
     if (!resultado.ok) {
-      const pub = await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "error", error_msg: resultado.error });
+      // "en_revision": ML sí creó/actualizó el aviso (hay external_id/
+      // permalink reales) pero lo tiene oculto -distinto de un rechazo
+      // total donde nunca se creó nada.
+      const pub = await setPublicacion({
+        dominio: vehiculo.dominio,
+        canal,
+        estado: resultado.enRevision ? "en_revision" : "error",
+        external_id: resultado.enRevision ? resultado.externalId : undefined,
+        permalink: resultado.enRevision ? resultado.permalink : undefined,
+        error_msg: resultado.error,
+      });
       return NextResponse.json({ error: resultado.error, publicacion: pub }, { status: 502 });
     }
     const pub = await setPublicacion({
@@ -120,6 +148,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
       estado: "publicado",
       external_id: resultado.externalId,
       permalink: resultado.permalink,
+      error_msg: "",
     });
     return NextResponse.json({ ok: true, publicacion: pub });
   }

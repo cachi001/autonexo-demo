@@ -260,6 +260,9 @@ export async function publicarItem(input: PublicarItemInput) {
       const motivo = await obtenerMotivoModeracion(data.id, input.accessToken);
       return {
         ok: false as const,
+        enRevision: true as const,
+        externalId: data.id as string,
+        permalink: data.permalink as string,
         error: motivo || "Mercado Libre puso el aviso en revisión y no es visible para compradores todavía.",
       };
     }
@@ -269,4 +272,37 @@ export async function publicarItem(input: PublicarItemInput) {
   // mostramos a la agencia tal cual, no lo tapamos con un mensaje genérico.
   const detalle = data?.cause?.map((c: { message?: string }) => c.message).join("; ") || data?.message || JSON.stringify(data);
   return { ok: false as const, error: `Mercado Libre rechazó la publicación: ${detalle}` };
+}
+
+// Actualiza precio/título de un ítem YA creado en ML -se usa cuando la
+// agencia corrige el precio de un vehículo que había quedado "en revisión"
+// (ej. por estar debajo del piso de mercado): había que actualizar el
+// mismo aviso, no crear uno nuevo -crear de nuevo hubiera dejado dos
+// publicaciones del mismo auto en la cuenta real de ML.
+export async function actualizarItem(
+  itemId: string,
+  accessToken: string,
+  cambios: { price?: number; title?: string }
+) {
+  const res = await fetch(`${API_URL}/items/${itemId}`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(cambios),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const detalle = data?.cause?.map((c: { message?: string }) => c.message).join("; ") || data?.message || JSON.stringify(data);
+    return { ok: false as const, error: `Mercado Libre rechazó la actualización: ${detalle}` };
+  }
+  if (data.status === "under_review") {
+    const motivo = await obtenerMotivoModeracion(itemId, accessToken);
+    return {
+      ok: false as const,
+      enRevision: true as const,
+      externalId: itemId,
+      permalink: data.permalink as string,
+      error: motivo || "Mercado Libre sigue sin mostrar el aviso -revisalo de nuevo en unos minutos.",
+    };
+  }
+  return { ok: true as const, externalId: itemId, permalink: data.permalink as string };
 }

@@ -47,7 +47,11 @@ const ESTADO_LABEL: Record<string, { texto: string; clase: string }> = {
   publicado: { texto: "Publicado", clase: "bg-emerald-50 text-emerald-700" },
   rechazado: { texto: "Rechazado", clase: "bg-red-50 text-red-700" },
   pausado: { texto: "Pausado", clase: "bg-zinc-100 text-zinc-600" },
-  error: { texto: "Error", clase: "bg-red-50 text-red-700" },
+  // "nunca se creó nada en Mercado Libre" -rechazo total.
+  error: { texto: "No se pudo publicar", clase: "bg-red-50 text-red-700" },
+  // Distinto de "error": ML sí creó el aviso (hay link real) pero lo
+  // esconde hasta corregir algo -ej. precio por debajo del piso de mercado.
+  en_revision: { texto: "Publicado, oculto en revisión", clase: "bg-amber-50 text-amber-700" },
 };
 
 function normalizar(s: string) {
@@ -107,6 +111,13 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   const [chasisEdit, setChasisEdit] = useState("");
   const [guardandoFicha, setGuardandoFicha] = useState(false);
 
+  // --- Editar precio -antes no se podía corregir el precio después de
+  // cargado, ni siquiera cuando Mercado Libre lo rechazaba por estar debajo
+  // de su piso de mercado (encontrado en vivo con el Ford Fiesta). ---
+  const [editandoPrecio, setEditandoPrecio] = useState(false);
+  const [precioEdit, setPrecioEdit] = useState("");
+  const [guardandoPrecio, setGuardandoPrecio] = useState(false);
+
   async function pedirCaptchaDnrpa() {
     setCargandoCaptcha(true);
     setErrorDnrpa("");
@@ -154,8 +165,24 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
     setCombustible(v.combustible || "");
     setPuertas(v.puertas || "");
     setChasisEdit(v.chasis || "");
+    setPrecioEdit(v.precio || "");
   }
   useEffect(() => { cargar(); }, [dominio]);
+
+  async function guardarPrecio() {
+    setGuardandoPrecio(true);
+    try {
+      await fetch(`/api/stock/${encodeURIComponent(dominio)}/precio`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ precio: precioEdit }),
+      });
+      setEditandoPrecio(false);
+      await cargar();
+    } finally {
+      setGuardandoPrecio(false);
+    }
+  }
 
   async function guardarFicha() {
     setGuardandoFicha(true);
@@ -324,7 +351,26 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
               <div>
                 <div className="font-mono text-xs text-zinc-400">{vehiculo.dominio}</div>
                 <h2 className="text-lg font-bold">{vehiculo.marca} {vehiculo.modelo}</h2>
-                <div className="text-xl font-bold text-emerald-700">{formatoPrecio(vehiculo.precio)}</div>
+                {editandoPrecio ? (
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={precioEdit}
+                      onChange={(e) => setPrecioEdit(e.target.value)}
+                      className="w-36 rounded-md border border-zinc-300 px-2 py-1 text-sm"
+                      autoFocus
+                    />
+                    <button onClick={guardarPrecio} disabled={guardandoPrecio} className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                      {guardandoPrecio ? "..." : "Guardar"}
+                    </button>
+                    <button onClick={() => { setEditandoPrecio(false); setPrecioEdit(vehiculo.precio); }} className="text-xs text-zinc-400 hover:text-zinc-600">Cancelar</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setEditandoPrecio(true)} className="flex items-center gap-1.5 text-xl font-bold text-emerald-700 hover:underline">
+                    {formatoPrecio(vehiculo.precio)}
+                    <span className="text-xs font-normal text-zinc-400">(editar)</span>
+                  </button>
+                )}
               </div>
               {vehiculo.documentacion_validada && (
                 <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700">
@@ -591,8 +637,8 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
                       <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${label.clase}`}>
                         {label.texto}
                       </span>
-                      {estado === "error" && pub?.error_msg && (
-                        <div className="mt-1 text-[11px] text-red-600">{pub.error_msg}</div>
+                      {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
+                        <div className="mt-1 max-w-xs text-[11px] leading-relaxed whitespace-pre-wrap text-red-600">{pub.error_msg}</div>
                       )}
                     </div>
                   </div>

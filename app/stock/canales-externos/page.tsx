@@ -22,7 +22,10 @@ const ESTADO_LABEL: Record<string, { texto: string; clase: string }> = {
   publicado: { texto: "Publicado", clase: "bg-emerald-50 text-emerald-700" },
   rechazado: { texto: "Rechazado", clase: "bg-red-50 text-red-700" },
   pausado: { texto: "Pausado", clase: "bg-zinc-100 text-zinc-600" },
-  error: { texto: "Error", clase: "bg-red-50 text-red-700" },
+  // "nunca se creó nada en Mercado Libre" -rechazo total, distinto de
+  // en_revision (sí se creó, pero ML lo tiene oculto hasta corregir algo).
+  error: { texto: "No se pudo publicar", clase: "bg-red-50 text-red-700" },
+  en_revision: { texto: "Oculto en revisión", clase: "bg-amber-50 text-amber-700" },
 };
 
 function formatoPrecio(p: string) {
@@ -130,7 +133,7 @@ export default async function CanalesExternosPage() {
                         const estado = pub?.estado || "sin_publicar";
                         const label = ESTADO_LABEL[estado] || ESTADO_LABEL.sin_publicar;
                         return (
-                          <td key={c} className="whitespace-nowrap px-3 py-2">
+                          <td key={c} className="px-3 py-2 align-top">
                             <div className="flex items-center gap-1.5">
                               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${label.clase}`}>{label.texto}</span>
                               {pub?.permalink && (
@@ -145,8 +148,8 @@ export default async function CanalesExternosPage() {
                                 </a>
                               )}
                             </div>
-                            {estado === "error" && pub?.error_msg && (
-                              <div className="mt-0.5 max-w-[220px] truncate text-[11px] text-red-600" title={pub.error_msg}>
+                            {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
+                              <div className="mt-0.5 max-w-xs whitespace-pre-wrap text-[11px] leading-relaxed text-red-600">
                                 {pub.error_msg}
                               </div>
                             )}
