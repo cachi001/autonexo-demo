@@ -1,41 +1,115 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buscarVehiculo, listarAgencias, obtenerCanalConectado, setPublicacion, Canal } from "@/lib/data";
-import { publicarItem } from "@/lib/mercadolibre";
+import { buscarVehiculo, obtenerCanalConectado, guardarCanalConectado, setPublicacion, Canal } from "@/lib/data";
+import { publicarItem, refrescarToken } from "@/lib/mercadolibre";
 import { publicarEnFacebook, publicarEnInstagram } from "@/lib/meta";
+import { agenciaDesdeRequest } from "@/lib/auth";
 
 // Publicación explícita a un canal externo -nunca automática (principio P7:
 // "la IA propone, la persona aprueba" para irreversibles, extendido acá a
 // syndication igual que al asistente de WhatsApp). Este endpoint solo se
 // llama cuando la agencia tocó el botón "Publicar" de un canal puntual.
+//
+// Multi-tenant: antes usaba "la primera agencia" fija (listarAgencias()[0]),
+// un bug real -con una sola agencia no se notaba, pero con dos, publicar el
+// vehículo de una agencia hubiera usado la conexión de ML de otra. Ahora la
+// agencia sale de la sesión, y buscarVehiculo ya filtra por agencia_id ->
+// si el dominio no es de esta agencia, "no se encontró" (ni pistas de que
+// existe en otra agencia).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ dominio: string }> }) {
-  const { dominio } = await params;
-  const { canal } = (await req.json()) as { canal: Canal };
+  const agencia = await agenciaDesdeRequest(req);
+  if (!agencia) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
 
-  const vehiculo = await buscarVehiculo(decodeURIComponent(dominio));
+  const { dominio } = await params;
+  const { canal, titulo: tituloPersonalizado, descripcion: descripcionPersonalizada } = (await req.json()) as {
+    canal: Canal;
+    titulo?: string;
+    descripcion?: string;
+  };
+
+  const vehiculo = await buscarVehiculo(decodeURIComponent(dominio), agencia.id);
   if (!vehiculo) return NextResponse.json({ error: `No se encontró el dominio '${dominio}'` }, { status: 404 });
 
-  // Prototipo de una sola agencia (ver /api/agencias): se usa la primera.
-  const agencias = await listarAgencias();
-  const agencia = agencias[0];
-  if (!agencia) return NextResponse.json({ error: "No hay una agencia cargada." }, { status: 400 });
-
   if (canal === "mercadolibre") {
-    const conectado = await obtenerCanalConectado(agencia.id, "mercadolibre");
+    let conectado = await obtenerCanalConectado(agencia.id, "mercadolibre");
     if (!conectado) {
-      return NextResponse.json({ error: "Mercado Libre no está conectado. Conectalo en Canales externos." }, { status: 400 });
+      return NextResponse.json({ error: "Mercado Libre no está conectado. Conectalo en Conexiones." }, { status: 400 });
     }
+    if (vehiculo.fotos.length === 0) {
+      return NextResponse.json({ error: "El vehículo no tiene fotos cargadas -hace falta al menos una para publicar." }, { status: 400 });
+    }
+
+    // El access_token de ML dura pocas horas (confirmado en vivo: "invalid
+    // access token") -se renueva proactivamente con el refresh_token si ya
+    // venció o está por vencer, antes de intentar publicar. ML rota el
+    // refresh_token en cada uso, por eso hay que persistir el nuevo par.
+    const yaVencido = new Date(conectado.expires_at).getTime() - Date.now() < 5 * 60 * 1000;
+    if (yaVencido) {
+      try {
+        const nuevo = await refrescarToken(conectado.refresh_token);
+        conectado = await guardarCanalConectado({
+          agencia_id: agencia.id,
+          canal: "mercadolibre",
+          access_token: nuevo.access_token,
+          refresh_token: nuevo.refresh_token,
+          expires_at: new Date(Date.now() + nuevo.expires_in * 1000).toISOString(),
+          cuenta_externa_id: conectado.cuenta_externa_id,
+          cuenta_externa_nombre: conectado.cuenta_externa_nombre,
+        });
+      } catch (e) {
+        const pub = await setPublicacion({
+          dominio: vehiculo.dominio,
+          canal,
+          estado: "error",
+          error_msg: "La conexión con Mercado Libre venció y no se pudo renovar -reconectá la cuenta en Conexiones.",
+        });
+        return NextResponse.json({ error: String(e), publicacion: pub }, { status: 502 });
+      }
+    }
+
     await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "pendiente_aprobacion" });
-    const resultado = await publicarItem({
-      accessToken: conectado.access_token,
-      titulo: `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio}`,
+    const fotosUrls = vehiculo.fotos.map(
+      (_, i) => `${req.nextUrl.origin}/api/stock/${encodeURIComponent(vehiculo.dominio)}/fotos/${i}`
+    );
+    const datosItem = {
+      // La agencia puede editar título y descripción específicos para este
+      // canal antes de publicar (ver preview en la ficha del vehículo) -si
+      // no mandó nada, se usa lo que ya hay cargado, como antes.
+      titulo: tituloPersonalizado?.trim() || `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio}`,
       precio: parseFloat(vehiculo.precio) || 0,
       marca: vehiculo.marca,
       modelo: vehiculo.modelo,
       anio: vehiculo.anio,
       km: vehiculo.km,
-      descripcion: vehiculo.descripcion,
-      fotosBase64: vehiculo.fotos,
-    });
+      descripcion: descripcionPersonalizada?.trim() || vehiculo.descripcion,
+      fotosUrls,
+      version: vehiculo.version,
+      combustible: vehiculo.combustible,
+      puertas: vehiculo.puertas,
+      dominio: vehiculo.dominio,
+      chasis: vehiculo.chasis,
+    };
+    let resultado = await publicarItem({ accessToken: conectado.access_token, ...datosItem });
+    // Red de seguridad además del chequeo de expires_at de arriba: si ML
+    // igual rechaza el token (puede invalidarlo antes de la fecha que él
+    // mismo dio), se renueva una vez más y se reintenta -nunca más de una
+    // vez, para no loopear si el problema es otro.
+    if (!resultado.ok && /access token|invalid_token/i.test(resultado.error)) {
+      try {
+        const nuevo = await refrescarToken(conectado.refresh_token);
+        conectado = await guardarCanalConectado({
+          agencia_id: agencia.id,
+          canal: "mercadolibre",
+          access_token: nuevo.access_token,
+          refresh_token: nuevo.refresh_token,
+          expires_at: new Date(Date.now() + nuevo.expires_in * 1000).toISOString(),
+          cuenta_externa_id: conectado.cuenta_externa_id,
+          cuenta_externa_nombre: conectado.cuenta_externa_nombre,
+        });
+        resultado = await publicarItem({ accessToken: conectado.access_token, ...datosItem });
+      } catch {
+        // Si la renovación en sí falla, se informa el error original de ML.
+      }
+    }
     if (!resultado.ok) {
       const pub = await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "error", error_msg: resultado.error });
       return NextResponse.json({ error: resultado.error, publicacion: pub }, { status: 502 });
@@ -45,14 +119,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
       canal,
       estado: "publicado",
       external_id: resultado.externalId,
+      permalink: resultado.permalink,
     });
-    return NextResponse.json({ ok: true, publicacion: pub, permalink: resultado.permalink });
+    return NextResponse.json({ ok: true, publicacion: pub });
   }
 
   if (canal === "facebook" || canal === "instagram") {
     const conectado = await obtenerCanalConectado(agencia.id, canal);
     if (!conectado) {
-      return NextResponse.json({ error: `${canal} no está conectado. Conectalo en Canales externos.` }, { status: 400 });
+      return NextResponse.json({ error: `${canal} no está conectado. Conectalo en Conexiones.` }, { status: 400 });
     }
     if (vehiculo.fotos.length === 0) {
       return NextResponse.json({ error: "El vehículo no tiene fotos cargadas -hace falta al menos una para publicar." }, { status: 400 });
@@ -70,7 +145,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
       const pub = await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "error", error_msg: resultado.error });
       return NextResponse.json({ error: resultado.error, publicacion: pub }, { status: 502 });
     }
-    const pub = await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "publicado", external_id: resultado.externalId });
+    const pub = await setPublicacion({
+      dominio: vehiculo.dominio,
+      canal,
+      estado: "publicado",
+      external_id: resultado.externalId,
+      permalink: resultado.permalink,
+    });
     return NextResponse.json({ ok: true, publicacion: pub });
   }
 

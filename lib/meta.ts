@@ -112,7 +112,33 @@ export async function publicarEnFacebook(pageId: string, pageAccessToken: string
   if (!res.ok) {
     return { ok: false as const, error: `Facebook rechazó la publicación: ${data?.error?.message || JSON.stringify(data)}` };
   }
-  return { ok: true as const, externalId: data.post_id || data.id };
+  const externalId = (data.post_id || data.id) as string;
+  const permalink = await permalinkFacebook(externalId, pageAccessToken);
+  return { ok: true as const, externalId, permalink };
+}
+
+// Mejor esfuerzo: si esta consulta extra falla, no se cae la publicación en
+// sí (ya se publicó) -simplemente no se guarda el link directo al aviso.
+async function permalinkFacebook(postId: string, accessToken: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`${GRAPH_URL}/${postId}?fields=permalink_url&access_token=${accessToken}`);
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { permalink_url?: string };
+    return data.permalink_url;
+  } catch {
+    return undefined;
+  }
+}
+
+async function permalinkInstagram(mediaId: string, accessToken: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`${GRAPH_URL}/${mediaId}?fields=permalink&access_token=${accessToken}`);
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { permalink?: string };
+    return data.permalink;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function publicarEnInstagram(igUserId: string, pageAccessToken: string, imagenUrl: string, mensaje: string) {
@@ -134,5 +160,7 @@ export async function publicarEnInstagram(igUserId: string, pageAccessToken: str
   if (!resPublicar.ok) {
     return { ok: false as const, error: `Instagram rechazó la publicación: ${publicado?.error?.message || JSON.stringify(publicado)}` };
   }
-  return { ok: true as const, externalId: publicado.id as string };
+  const externalId = publicado.id as string;
+  const permalink = await permalinkInstagram(externalId, pageAccessToken);
+  return { ok: true as const, externalId, permalink };
 }

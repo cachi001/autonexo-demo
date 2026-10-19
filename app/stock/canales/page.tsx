@@ -3,7 +3,8 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, AlertTriangle, Share2 } from "lucide-react";
+import { CheckCircle2, AlertTriangle } from "lucide-react";
+import CanalLogo from "@/components/CanalLogo";
 
 type CanalConectado = {
   canal: "mercadolibre" | "instagram" | "facebook";
@@ -34,12 +35,12 @@ function CanalesPageInterna() {
   const [cargando, setCargando] = useState(true);
 
   async function cargar() {
-    const resA = await fetch("/api/agencias");
-    const dataA = await resA.json();
-    const a = (dataA.agencias || [])[0] || null;
+    const resMe = await fetch("/api/auth/me");
+    const dataMe = await resMe.json();
+    const a = dataMe.rol === "agencia" ? dataMe.agencia : null;
     setAgencia(a);
     if (a) {
-      const resC = await fetch(`/api/canales?agenciaId=${encodeURIComponent(a.id)}`);
+      const resC = await fetch("/api/canales");
       const dataC = await resC.json();
       setConectados(dataC.canales || []);
     }
@@ -52,7 +53,7 @@ function CanalesPageInterna() {
     await fetch("/api/canales", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agenciaId: agencia.id, canal }),
+      body: JSON.stringify({ canal }),
     });
     cargar();
   }
@@ -63,17 +64,18 @@ function CanalesPageInterna() {
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3 pl-12 lg:pl-0">
+        <div className="flex items-center gap-3">
           <Link href="/stock" className="text-sm text-zinc-400 hover:text-zinc-700">Panel</Link>
           <span className="text-zinc-300">/</span>
-          <h1 className="text-base font-semibold tracking-tight">Canales externos</h1>
+          <h1 className="text-base font-semibold tracking-tight">Conexiones</h1>
         </div>
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <p className="mb-5 text-sm text-zinc-500">
           Conectá tus cuentas una vez acá. Después, desde cada vehículo del stock, publicás con un botón
-          (siempre con aprobación explícita — nada se publica solo).
+          (siempre con aprobación explícita — nada se publica solo). Para ver qué está publicado y hacerle
+          seguimiento, andá a <Link href="/stock/canales-externos" className="underline">Canales externos</Link>.
         </p>
 
         {conectadoAhora && (
@@ -102,9 +104,7 @@ function CanalesPageInterna() {
               return (
                 <div key={c.id} className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100">
-                      <Share2 className="h-5 w-5 text-zinc-500" strokeWidth={2} />
-                    </div>
+                    <CanalLogo canal={c.id} />
                     <div>
                       <div className="text-sm font-semibold text-zinc-800">{c.nombre}</div>
                       {conectado ? (
@@ -123,7 +123,7 @@ function CanalesPageInterna() {
                     </button>
                   ) : (
                     <a
-                      href={`/api/canales/${c.conectarVia}/conectar?agenciaId=${encodeURIComponent(agencia.id)}`}
+                      href={`/api/canales/${c.conectarVia}/conectar`}
                       className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
                     >
                       Conectar

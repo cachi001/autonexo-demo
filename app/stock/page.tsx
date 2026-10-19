@@ -30,7 +30,7 @@ export default function StockPage() {
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
-        <div className="pl-12 lg:pl-0">
+        <div className="">
           <h1 className="text-base font-semibold tracking-tight">Panel de agencia</h1>
           <p className="hidden text-xs text-zinc-500 sm:block">Resumen general del stock, validación de papeles y consultas de compradores.</p>
         </div>

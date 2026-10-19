@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { crearLead, buscarVehiculo } from "@/lib/data";
+import { crearLead, buscarVehiculoPublico } from "@/lib/data";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ dominio: string }> }) {
   const { dominio } = await params;
   const dom = decodeURIComponent(dominio);
-  if (!(await buscarVehiculo(dom))) {
+  if (!(await buscarVehiculoPublico(dom))) {
     return NextResponse.json({ error: `No se encontró el dominio '${dom}'` });
   }
   const body = await req.json();

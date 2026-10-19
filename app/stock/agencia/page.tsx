@@ -29,9 +29,13 @@ export default function AgenciaPage() {
   const [guardado, setGuardado] = useState(false);
 
   useEffect(() => {
-    fetch("/api/agencias")
+    fetch("/api/auth/me")
       .then((r) => r.json())
-      .then((d) => setAgencia((d.agencias || [])[0] || null))
+      .then((me) => {
+        if (me.rol !== "agencia") return null;
+        return fetch(`/api/agencias/${encodeURIComponent(me.agencia.id)}`).then((r) => r.json());
+      })
+      .then((a) => setAgencia(a || null))
       .finally(() => setCargando(false));
   }, []);
 
@@ -85,7 +89,7 @@ export default function AgenciaPage() {
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3 pl-12 lg:pl-0">
+        <div className="flex items-center gap-3">
           <Link href="/stock" className="text-sm text-zinc-400 hover:text-zinc-700">Panel</Link>
           <span className="text-zinc-300">/</span>
           <h1 className="text-base font-semibold tracking-tight">Datos de la agencia</h1>

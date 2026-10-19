@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Camera, FileText, Car, MessageCircle, ShoppingCart, Building2, Share2,
+  LayoutDashboard, Camera, FileText, Car, MessageCircle, ShoppingCart, Building2, Link2, Radio, LogOut,
 } from "lucide-react";
 
 const NAV = [
@@ -11,13 +11,22 @@ const NAV = [
   { href: "/stock/cedula", Icon: Camera, label: "Cargar por cédula" },
   { href: "/stock/csv", Icon: FileText, label: "Cargar por planilla" },
   { href: "/stock/listado", Icon: Car, label: "Stock" },
-  { href: "/stock/canales", Icon: Share2, label: "Canales externos" },
+  { href: "/stock/canales", Icon: Link2, label: "Conexiones" },
+  { href: "/stock/canales-externos", Icon: Radio, label: "Canales externos" },
   { href: "/stock/consultas", Icon: MessageCircle, label: "Consultas" },
   { href: "/stock/agencia", Icon: Building2, label: "Datos de la agencia" },
 ];
 
 export default function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function cerrarSesion() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <>
       <div className="flex items-center gap-2 border-b border-white/10 px-6 py-5">
@@ -49,6 +58,12 @@ export default function SidebarContent({ onNavigate }: { onNavigate?: () => void
         <Link href="/catalogo" className="flex items-center justify-center gap-2 rounded-lg bg-white/10 px-3 py-2.5 text-sm font-semibold text-white hover:bg-white/20">
           <ShoppingCart className="h-4 w-4" strokeWidth={2} /> Ver como comprador
         </Link>
+        <button
+          onClick={cerrarSesion}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 hover:bg-white/5 hover:text-white"
+        >
+          <LogOut className="h-4 w-4" strokeWidth={2} /> Cerrar sesión
+        </button>
       </div>
     </>
   );

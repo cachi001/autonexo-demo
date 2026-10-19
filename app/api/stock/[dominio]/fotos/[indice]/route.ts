@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
-import { buscarVehiculo } from "@/lib/data";
+import { buscarVehiculoPublico } from "@/lib/data";
 
 // Sirve UNA foto del stock como imagen real en una URL pública -las fotos se
 // guardan como data URL (base64) directo en Postgres, que sirve para <img
 // src> dentro de la app, pero Instagram exige que la imagen esté en una URL
 // pública de verdad (image_url) para poder publicarla -no acepta el archivo
-// ni el base64 directo. Esta ruta es ese puente.
+// ni el base64 directo. Esta ruta es ese puente. A propósito SIN sesión: la
+// pide el servidor de Meta/Instagram, no el navegador de la agencia -no
+// tiene la cookie de sesión, así que no puede pasar por agenciaDesdeRequest.
 export async function GET(_req: Request, { params }: { params: Promise<{ dominio: string; indice: string }> }) {
   const { dominio, indice } = await params;
-  const vehiculo = await buscarVehiculo(decodeURIComponent(dominio));
+  const vehiculo = await buscarVehiculoPublico(decodeURIComponent(dominio));
   if (!vehiculo) return new NextResponse("No encontrado", { status: 404 });
 
   const foto = vehiculo.fotos[parseInt(indice, 10)];

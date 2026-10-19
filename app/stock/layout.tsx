@@ -1,37 +1,21 @@
-"use client";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { obtenerSesion } from "@/lib/data";
+import { COOKIE_SESION } from "@/lib/auth";
+import StockShell from "@/components/StockShell";
 
-import { useState } from "react";
-import { Menu } from "lucide-react";
-import SidebarContent from "@/components/Sidebar";
+// Gate de sesión real para todo /stock/* -antes esta carpeta era pública
+// para cualquiera que supiera la URL, no había ningún login. Server
+// Component a propósito (no "use client"): el chequeo corre antes de
+// mandar cualquier HTML al navegador, así una sesión inválida nunca llega
+// a ver ni un parpadeo de los datos de la agencia.
+export default async function StockLayout({ children }: { children: React.ReactNode }) {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(COOKIE_SESION)?.value;
+  const sesion = token ? await obtenerSesion(token) : null;
+  if (!sesion || sesion.rol !== "agencia") {
+    redirect("/login");
+  }
 
-export default function StockLayout({ children }: { children: React.ReactNode }) {
-  const [menuAbierto, setMenuAbierto] = useState(false);
-
-  return (
-    <div className="flex min-h-screen bg-zinc-50 text-zinc-900">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-zinc-900 lg:flex">
-        <SidebarContent />
-      </aside>
-
-      {menuAbierto && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setMenuAbierto(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-zinc-900 shadow-2xl">
-            <SidebarContent onNavigate={() => setMenuAbierto(false)} />
-          </aside>
-        </div>
-      )}
-
-      <div className="flex-1 lg:pl-64">
-        <button
-          onClick={() => setMenuAbierto(true)}
-          className="fixed left-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white shadow-sm lg:hidden"
-          aria-label="Abrir menú"
-        >
-          <Menu className="h-5 w-5" strokeWidth={2} />
-        </button>
-        {children}
-      </div>
-    </div>
-  );
+  return <StockShell>{children}</StockShell>;
 }

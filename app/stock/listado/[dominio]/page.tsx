@@ -2,18 +2,24 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, AlertTriangle, ClipboardList, FileText, Share2 } from "lucide-react";
+import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, AlertTriangle, ClipboardList, FileText, Share2, ExternalLink } from "lucide-react";
 import { categorizarVehiculo, DOCUMENTOS_POR_CATEGORIA, LABEL_CATEGORIA } from "@/lib/documentos";
+import CanalLogo from "@/components/CanalLogo";
+import type { Canal } from "@/lib/data";
 
 type DocumentoVehiculo = { nombre: string; dataUrl: string };
 
 type Vehiculo = {
   dominio: string; marca: string; modelo: string; anio: string; tipo: string;
   precio: string; km: string; color: string; descripcion: string;
+  version: string; combustible: string; puertas: string; chasis: string;
   documentos: Record<string, DocumentoVehiculo | undefined>;
   documentacion_validada: boolean; documentacion_validada_fecha: string | null;
   vistas_reales: number; consultas_reales: number; fotos: string[];
 };
+
+const OPCIONES_COMBUSTIBLE = ["Nafta", "GNC", "Nafta/GNC", "Diésel", "Híbrido", "Eléctrico"];
+const OPCIONES_PUERTAS = ["2", "3", "4", "5"];
 
 type ResultadoDNRPA = {
   dominio: string;
@@ -27,9 +33,9 @@ type ResultadoDNRPA = {
   fechaConsulta: string;
 };
 
-type Publicacion = { canal: string; estado: string; external_id: string; error_msg: string };
+type Publicacion = { canal: string; estado: string; external_id: string; permalink: string; error_msg: string };
 
-const CANALES = [
+const CANALES: { id: Canal; nombre: string }[] = [
   { id: "mercadolibre", nombre: "Mercado Libre" },
   { id: "instagram", nombre: "Instagram" },
   { id: "facebook", nombre: "Facebook" },
@@ -81,6 +87,26 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   const [publicando, setPublicando] = useState<string | null>(null);
   const [errorPublicar, setErrorPublicar] = useState("");
 
+  // --- Editar título/descripción + preview antes de publicar en Mercado
+  // Libre -antes se publicaba directo con el título/descripción que ya
+  // tuviera cargado el vehículo, sin poder ajustarlo para ese aviso
+  // puntual ni ver cómo iba a quedar antes de confirmar. ---
+  const [editandoMl, setEditandoMl] = useState(false);
+  const [mlTitulo, setMlTitulo] = useState("");
+  const [mlDescripcion, setMlDescripcion] = useState("");
+
+  // --- Ficha técnica (version/combustible/puertas) -alineada con AutoClick,
+  // la exige Mercado Libre para publicar en "Autos y Camionetas". Chasis se
+  // suma acá también: ML exige desde oct-2024 patente + últimos 6 del
+  // chasis para publicar, y hasta ahora no había forma de completarlo si el
+  // vehículo se cargó por planilla o el OCR de la cédula no lo leyó bien. ---
+  const [editandoFicha, setEditandoFicha] = useState(false);
+  const [version, setVersion] = useState("");
+  const [combustible, setCombustible] = useState("");
+  const [puertas, setPuertas] = useState("");
+  const [chasisEdit, setChasisEdit] = useState("");
+  const [guardandoFicha, setGuardandoFicha] = useState(false);
+
   async function pedirCaptchaDnrpa() {
     setCargandoCaptcha(true);
     setErrorDnrpa("");
@@ -124,15 +150,31 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
     const v = (data.vehiculos || []).find((x: Vehiculo) => x.dominio === dominio);
     if (!v) { setNotFound(true); return; }
     setVehiculo(v);
+    setVersion(v.version || "");
+    setCombustible(v.combustible || "");
+    setPuertas(v.puertas || "");
+    setChasisEdit(v.chasis || "");
   }
   useEffect(() => { cargar(); }, [dominio]);
 
+  async function guardarFicha() {
+    setGuardandoFicha(true);
+    try {
+      await fetch(`/api/stock/${encodeURIComponent(dominio)}/ficha-tecnica`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version, combustible, puertas, chasis: chasisEdit }),
+      });
+      setEditandoFicha(false);
+      await cargar();
+    } finally {
+      setGuardandoFicha(false);
+    }
+  }
+
   async function cargarCanalesYPublicaciones() {
-    const resA = await fetch("/api/agencias");
-    const dataA = await resA.json();
-    const agencia = (dataA.agencias || [])[0];
-    if (agencia) {
-      const resC = await fetch(`/api/canales?agenciaId=${encodeURIComponent(agencia.id)}`);
+    const resC = await fetch("/api/canales");
+    if (resC.ok) {
       const dataC = await resC.json();
       setCanalesConectados((dataC.canales || []).map((c: { canal: string }) => c.canal));
     }
@@ -142,23 +184,31 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   }
   useEffect(() => { cargarCanalesYPublicaciones(); }, [dominio]);
 
-  async function publicarEnCanal(canal: string) {
+  async function publicarEnCanal(canal: string, overrides?: { titulo: string; descripcion: string }) {
     setPublicando(canal);
     setErrorPublicar("");
     try {
       const res = await fetch(`/api/stock/${encodeURIComponent(dominio)}/publicar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ canal }),
+        body: JSON.stringify({ canal, ...overrides }),
       });
       const data = await res.json();
       if (data.error) setErrorPublicar(data.error);
+      else setEditandoMl(false);
       await cargarCanalesYPublicaciones();
     } catch {
       setErrorPublicar("No se pudo conectar con el servicio de publicación. Probá de nuevo.");
     } finally {
       setPublicando(null);
     }
+  }
+
+  function abrirEdicionMl() {
+    if (!vehiculo) return;
+    setMlTitulo(`${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio}`.slice(0, 60));
+    setMlDescripcion(vehiculo.descripcion || "");
+    setEditandoMl(true);
   }
 
   async function subirFotos(files: FileList) {
@@ -224,7 +274,7 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3 pl-12 lg:pl-0">
+        <div className="flex items-center gap-3">
           <Link href="/stock" className="text-sm text-zinc-400 hover:text-zinc-700">Panel</Link>
           <span className="text-zinc-300">/</span>
           <Link href="/stock/listado" className="text-sm text-zinc-400 hover:text-zinc-700">Stock</Link>
@@ -429,6 +479,86 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
           )}
         </div>
 
+        {/* Ficha técnica -alineada con AutoClick (version/combustible ya
+            existen ahí; puertas es nuevo en los dos). Mercado Libre la exige
+            para publicar en "Autos y Camionetas" (TRIM/FUEL_TYPE/DOORS). */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-1 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Ficha técnica</h2>
+            {!editandoFicha && (
+              <button onClick={() => setEditandoFicha(true)} className="text-xs font-medium text-blue-600 hover:underline">
+                {vehiculo.version || vehiculo.combustible || vehiculo.puertas || vehiculo.chasis ? "Editar" : "Completar"}
+              </button>
+            )}
+          </div>
+          <p className="mb-3 text-xs text-zinc-500">
+            Versión, combustible, puertas y chasis — obligatorios para publicar en Mercado Libre (el chasis desde oct-2024).
+          </p>
+          {editandoFicha ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Versión</label>
+                  <input
+                    value={version}
+                    onChange={(e) => setVersion(e.target.value)}
+                    placeholder="Ej: 1.6 Trendline MT"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Combustible</label>
+                  <select
+                    value={combustible}
+                    onChange={(e) => setCombustible(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  >
+                    <option value="">Elegí uno</option>
+                    {OPCIONES_COMBUSTIBLE.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Puertas</label>
+                  <select
+                    value={puertas}
+                    onChange={(e) => setPuertas(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  >
+                    <option value="">Elegí una</option>
+                    {OPCIONES_PUERTAS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Chasis</label>
+                  <input
+                    value={chasisEdit}
+                    onChange={(e) => setChasisEdit(e.target.value)}
+                    placeholder="Viene de la cédula, o completalo a mano"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={guardarFicha}
+                  disabled={guardandoFicha}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                >
+                  {guardandoFicha ? "Guardando..." : "Guardar"}
+                </button>
+                <button onClick={() => setEditandoFicha(false)} className="text-xs font-medium text-zinc-500 hover:text-zinc-700">Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-3 text-xs">
+              <div><span className="text-zinc-400">Versión</span><div className="font-medium text-zinc-800">{vehiculo.version || "—"}</div></div>
+              <div><span className="text-zinc-400">Combustible</span><div className="font-medium text-zinc-800">{vehiculo.combustible || "—"}</div></div>
+              <div><span className="text-zinc-400">Puertas</span><div className="font-medium text-zinc-800">{vehiculo.puertas || "—"}</div></div>
+              <div><span className="text-zinc-400">Chasis</span><div className="font-medium text-zinc-800">{vehiculo.chasis || "—"}</div></div>
+            </div>
+          )}
+        </div>
+
         {/* Publicación a canales externos -nunca automática: botón explícito por
             canal (principio P7, "la IA propone, la persona aprueba"). */}
         <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
@@ -437,7 +567,8 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
             <h2 className="text-sm font-semibold">Publicar en redes</h2>
           </div>
           <p className="mb-3 text-xs text-zinc-500">
-            Cada canal se publica por separado, con un botón explícito — nunca automático.
+            Cada canal se publica por separado, con un botón explícito — nunca automático. Las cuentas se
+            conectan desde <Link href="/stock/canales" className="underline">Conexiones</Link>.
           </p>
           {errorPublicar && (
             <div className="mb-3 flex items-start gap-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
@@ -453,33 +584,127 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
               const label = ESTADO_LABEL[estado] || ESTADO_LABEL.sin_publicar;
               return (
                 <div key={c.id} className="flex items-center justify-between rounded-lg border border-zinc-200 p-3">
-                  <div>
-                    <div className="text-sm font-semibold text-zinc-800">{c.nombre}</div>
-                    <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${label.clase}`}>
-                      {label.texto}
-                    </span>
-                    {estado === "error" && pub?.error_msg && (
-                      <div className="mt-1 text-[11px] text-red-600">{pub.error_msg}</div>
+                  <div className="flex items-center gap-2.5">
+                    <CanalLogo canal={c.id} size={28} />
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-800">{c.nombre}</div>
+                      <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${label.clase}`}>
+                        {label.texto}
+                      </span>
+                      {estado === "error" && pub?.error_msg && (
+                        <div className="mt-1 text-[11px] text-red-600">{pub.error_msg}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {pub?.permalink && (
+                      <a
+                        href={pub.permalink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                      >
+                        Ver aviso <ExternalLink className="h-3 w-3" strokeWidth={2} />
+                      </a>
+                    )}
+                    {!conectado ? (
+                      <span className="text-xs font-medium text-zinc-400">No conectado</span>
+                    ) : estado === "publicado" ? (
+                      <button disabled className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white opacity-50">
+                        ✓ Publicado
+                      </button>
+                    ) : c.id === "mercadolibre" ? (
+                      <button
+                        onClick={abrirEdicionMl}
+                        className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
+                      >
+                        Publicar
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => publicarEnCanal(c.id)}
+                        disabled={publicando === c.id}
+                        className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+                      >
+                        {publicando === c.id && <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />}
+                        {publicando === c.id ? "Publicando..." : "Publicar"}
+                      </button>
                     )}
                   </div>
-                  {!conectado ? (
-                    <Link href="/stock/canales" className="text-xs font-medium text-zinc-500 underline hover:text-zinc-700">
-                      Conectar
-                    </Link>
-                  ) : (
-                    <button
-                      onClick={() => publicarEnCanal(c.id)}
-                      disabled={publicando === c.id || estado === "publicado"}
-                      className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
-                    >
-                      {publicando === c.id && <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />}
-                      {estado === "publicado" ? "✓ Publicado" : publicando === c.id ? "Publicando..." : "Publicar"}
-                    </button>
-                  )}
                 </div>
               );
             })}
           </div>
+
+          {editandoMl && vehiculo && (
+            <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-zinc-800">Editar antes de publicar en Mercado Libre</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Título (máx. 60 caracteres)</label>
+                    <input
+                      value={mlTitulo}
+                      onChange={(e) => setMlTitulo(e.target.value.slice(0, 60))}
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    />
+                    <div className="mt-0.5 text-right text-[11px] text-zinc-400">{mlTitulo.length}/60</div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Descripción</label>
+                    <textarea
+                      value={mlDescripcion}
+                      onChange={(e) => setMlDescripcion(e.target.value)}
+                      rows={5}
+                      placeholder="Service al día, único dueño, etc."
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Preview: igual estructura visual que un aviso real de ML
+                    (foto + título + precio + ubicación + descripción) -no
+                    había ninguna forma de ver esto antes de publicar. */}
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Vista previa del aviso</label>
+                  <div className="overflow-hidden rounded-lg border border-zinc-300 bg-white">
+                    <div className="flex h-40 items-center justify-center bg-zinc-100">
+                      {vehiculo.fotos[0] ? (
+                        <img src={vehiculo.fotos[0]} alt={mlTitulo} className="h-full w-full object-cover" />
+                      ) : (
+                        <Camera className="h-8 w-8 text-zinc-300" strokeWidth={1.5} />
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <div className="text-sm font-medium text-zinc-800">{mlTitulo || "(sin título)"}</div>
+                      <div className="mt-1 text-lg font-bold text-zinc-900">{formatoPrecio(vehiculo.precio)}</div>
+                      <div className="mt-0.5 text-xs text-zinc-400">Mendoza, Mendoza</div>
+                      {mlDescripcion && (
+                        <p className="mt-2 whitespace-pre-wrap text-xs text-zinc-600">{mlDescripcion}</p>
+                      )}
+                    </div>
+                  </div>
+                  {vehiculo.fotos.length === 0 && (
+                    <p className="mt-1 text-[11px] text-amber-600">Este vehículo no tiene fotos — hace falta al menos una para publicar.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2">
+                <button
+                  onClick={() => publicarEnCanal("mercadolibre", { titulo: mlTitulo, descripcion: mlDescripcion })}
+                  disabled={publicando === "mercadolibre" || !mlTitulo.trim() || vehiculo.fotos.length === 0}
+                  className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {publicando === "mercadolibre" && <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />}
+                  {publicando === "mercadolibre" ? "Publicando..." : "Confirmar y publicar"}
+                </button>
+                <button onClick={() => setEditandoMl(false)} className="text-xs font-medium text-zinc-500 hover:text-zinc-700">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Documentación requerida según el tipo de vehículo — solo evidencia cargada, sin OCR ni validación automática */}

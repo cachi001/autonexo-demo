@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listarCanalesConectados, desconectarCanal, Canal } from "@/lib/data";
+import { agenciaDesdeRequest } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
-  const agenciaId = req.nextUrl.searchParams.get("agenciaId");
-  if (!agenciaId) return NextResponse.json({ error: "Falta agenciaId." }, { status: 400 });
-  const canales = await listarCanalesConectados(agenciaId);
+  const agencia = await agenciaDesdeRequest(req);
+  if (!agencia) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  const canales = await listarCanalesConectados(agencia.id);
   return NextResponse.json({ canales });
 }
 
 export async function DELETE(req: NextRequest) {
-  const { agenciaId, canal } = (await req.json()) as { agenciaId: string; canal: Canal };
-  if (!agenciaId || !canal) return NextResponse.json({ error: "Faltan datos." }, { status: 400 });
-  await desconectarCanal(agenciaId, canal);
+  const agencia = await agenciaDesdeRequest(req);
+  if (!agencia) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  const { canal } = (await req.json()) as { canal: Canal };
+  if (!canal) return NextResponse.json({ error: "Falta el canal." }, { status: 400 });
+  await desconectarCanal(agencia.id, canal);
   return NextResponse.json({ ok: true });
 }

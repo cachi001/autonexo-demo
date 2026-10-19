@@ -44,7 +44,7 @@ export default function StockListadoPage() {
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-3 pl-12 lg:pl-0">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link href="/stock" className="text-sm text-zinc-400 hover:text-zinc-700">Panel</Link>
             <span className="text-zinc-300">/</span>

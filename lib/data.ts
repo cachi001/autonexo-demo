@@ -9,6 +9,7 @@ const sql = neon(process.env.POSTGRES_URL!);
 
 export type Vehiculo = {
   dominio: string;
+  agencia_id: string;
   marca: string;
   modelo: string;
   anio: string;
@@ -17,6 +18,15 @@ export type Vehiculo = {
   km: string;
   color: string;
   descripcion: string;
+  // Ficha técnica -alineada con los campos que ya tiene AutoClick
+  // (version/combustible, ver AutoClick/autoclick-app/app/page.tsx
+  // componente Publish) más "puertas", que falta en los dos. Mercado Libre
+  // exige los tres como atributos obligatorios de la categoría "Autos y
+  // Camionetas" (TRIM/FUEL_TYPE/DOORS, confirmado en vivo contra la API
+  // real) -ver lib/mercadolibre.ts.
+  version: string;
+  combustible: string;
+  puertas: string;
   // Chasis y datos del titular vienen de la cédula pero el OCR no siempre
   // los lee bien (ej. DNI tapado/parcial) -> la agencia tiene que poder
   // escribirlos o corregirlos a mano, así que se guardan como el resto.
@@ -91,6 +101,7 @@ export type Publicacion = {
   canal: Canal;
   estado: EstadoPublicacion;
   external_id: string;
+  permalink: string;
   error_msg: string;
   actualizado_en: string;
 };
@@ -108,6 +119,7 @@ export type Lead = {
 const SEED_STOCK: Vehiculo[] = [
   {
     dominio: "AB123CD",
+    agencia_id: "",
     marca: "VOLKSWAGEN",
     modelo: "GOL TREND",
     anio: "2019",
@@ -116,6 +128,9 @@ const SEED_STOCK: Vehiculo[] = [
     km: "65000",
     color: "BLANCO",
     descripcion: "Único dueño, service oficial",
+    version: "",
+    combustible: "",
+    puertas: "",
     chasis: "",
     titular_nombre: "",
     titular_domicilio: "",
@@ -129,6 +144,7 @@ const SEED_STOCK: Vehiculo[] = [
   },
   {
     dominio: "AC456EF",
+    agencia_id: "",
     marca: "FORD",
     modelo: "FIESTA",
     anio: "2018",
@@ -137,6 +153,9 @@ const SEED_STOCK: Vehiculo[] = [
     km: "80000",
     color: "GRIS",
     descripcion: "Buen estado",
+    version: "",
+    combustible: "",
+    puertas: "",
     chasis: "",
     titular_nombre: "",
     titular_domicilio: "",
@@ -150,6 +169,7 @@ const SEED_STOCK: Vehiculo[] = [
   },
   {
     dominio: "A208SDV",
+    agencia_id: "",
     marca: "ZANELLA",
     modelo: "SAPUCAI 150 F",
     anio: "",
@@ -158,6 +178,9 @@ const SEED_STOCK: Vehiculo[] = [
     km: "12000",
     color: "ROJA",
     descripcion: "Cargada por foto de cédula real — dato de prueba de esta sesión",
+    version: "",
+    combustible: "",
+    puertas: "",
     chasis: "",
     titular_nombre: "",
     titular_domicilio: "",
@@ -210,6 +233,16 @@ function asegurarTablas(): Promise<void> {
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS titular_dni TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS libre_deuda_atm TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS documentos JSONB NOT NULL DEFAULT '{}'::jsonb`;
+      // Multi-tenant: antes TODO el stock era una sola bolsa global visible
+      // para cualquier agencia (sin columna de dueño). Se agrega agencia_id
+      // y se completa con la primera agencia existente (la única que había
+      // en producción hasta esta migración) para no perder el stock ya
+      // cargado -> de acá en más toda lectura/escritura de /api/stock/* se
+      // filtra por la agencia de la sesión (ver lib/auth.ts).
+      await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS agencia_id TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS version TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS combustible TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE stock ADD COLUMN IF NOT EXISTS puertas TEXT NOT NULL DEFAULT ''`;
       // La ficha del stock ahora muestra el libre deuda ATM como un
       // documento más de la checklist (en vez de un campo aparte cargado
       // desde el wizard de cédula) -> se migra una sola vez lo que ya
@@ -245,6 +278,30 @@ function asegurarTablas(): Promise<void> {
       await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS celular_operador TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS telefono_fijo_codigo_area TEXT NOT NULL DEFAULT ''`;
       await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS telefono_fijo_numero TEXT NOT NULL DEFAULT ''`;
+      // Login real por agencia (antes no existía ningún control de acceso:
+      // cualquiera que entraba a /stock veía los datos de la única agencia
+      // que hubiera). Hash con bcrypt, nunca se guarda ni se devuelve la
+      // contraseña en texto plano.
+      await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS password_hash TEXT NOT NULL DEFAULT ''`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS sesiones (
+          token TEXT PRIMARY KEY,
+          agencia_id TEXT,
+          rol TEXT NOT NULL DEFAULT 'agencia',
+          creado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
+          expira_en TIMESTAMPTZ NOT NULL
+        )
+      `;
+      // Backfill de agencia_id en stock: la primera agencia dada de alta se
+      // queda con todo el stock que ya existía antes de que hubiera más de
+      // una agencia posible. Es un no-op en las corridas siguientes (WHERE
+      // agencia_id = '' deja de matchear nada una vez corrido).
+      const [{ id: primeraAgenciaId } = { id: null }] = (await sql`
+        SELECT id FROM agencias ORDER BY fecha_alta ASC LIMIT 1
+      `) as { id: string | null }[];
+      if (primeraAgenciaId) {
+        await sql`UPDATE stock SET agencia_id = ${primeraAgenciaId} WHERE agencia_id = ''`;
+      }
       await sql`
         CREATE TABLE IF NOT EXISTS canales_conectados (
           id TEXT PRIMARY KEY,
@@ -270,6 +327,7 @@ function asegurarTablas(): Promise<void> {
           PRIMARY KEY (dominio, canal)
         )
       `;
+      await sql`ALTER TABLE publicaciones ADD COLUMN IF NOT EXISTS permalink TEXT NOT NULL DEFAULT ''`;
       await sql`
         CREATE TABLE IF NOT EXISTS leads (
           id TEXT PRIMARY KEY,
@@ -282,11 +340,11 @@ function asegurarTablas(): Promise<void> {
         )
       `;
       const [{ count }] = (await sql`SELECT COUNT(*)::int AS count FROM stock`) as { count: number }[];
-      if (count === 0) {
+      if (count === 0 && primeraAgenciaId) {
         for (const v of SEED_STOCK) {
           await sql`
-            INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentos, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
-            VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, ${JSON.stringify(v.documentos)}::jsonb, ${v.documentacion_validada}, ${v.documentacion_validada_fecha}, ${v.vistas_reales}, ${JSON.stringify(v.fotos)})
+            INSERT INTO stock (dominio, agencia_id, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentos, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
+            VALUES (${v.dominio}, ${primeraAgenciaId}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, ${JSON.stringify(v.documentos)}::jsonb, ${v.documentacion_validada}, ${v.documentacion_validada_fecha}, ${v.vistas_reales}, ${JSON.stringify(v.fotos)})
           `;
         }
       }
@@ -298,6 +356,7 @@ function asegurarTablas(): Promise<void> {
 function filaAVehiculo(r: Record<string, unknown>): Vehiculo {
   return {
     dominio: r.dominio as string,
+    agencia_id: r.agencia_id as string,
     marca: r.marca as string,
     modelo: r.modelo as string,
     anio: r.anio as string,
@@ -306,6 +365,9 @@ function filaAVehiculo(r: Record<string, unknown>): Vehiculo {
     km: r.km as string,
     color: r.color as string,
     descripcion: r.descripcion as string,
+    version: (r.version as string) || "",
+    combustible: (r.combustible as string) || "",
+    puertas: (r.puertas as string) || "",
     chasis: (r.chasis as string) || "",
     titular_nombre: (r.titular_nombre as string) || "",
     titular_domicilio: (r.titular_domicilio as string) || "",
@@ -331,13 +393,31 @@ function filaALead(r: Record<string, unknown>): Lead {
   };
 }
 
-export async function listarStock(): Promise<Vehiculo[]> {
+// Multi-tenant: el stock privado de cada agencia (panel /stock) SIEMPRE se
+// lee/escribe filtrado por agencia_id de la sesión. El catálogo público
+// (/catalogo) es la única excepción con intención real -> usa
+// listarStockPublico() (sin filtro) más abajo, no esta función.
+export async function listarStock(agenciaId: string): Promise<Vehiculo[]> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM stock WHERE agencia_id = ${agenciaId}`;
+  return filas.map(filaAVehiculo);
+}
+
+export async function listarStockPublico(): Promise<Vehiculo[]> {
   await asegurarTablas();
   const filas = await sql`SELECT * FROM stock`;
   return filas.map(filaAVehiculo);
 }
 
-export async function buscarVehiculo(dominio: string): Promise<Vehiculo | undefined> {
+export async function buscarVehiculo(dominio: string, agenciaId: string): Promise<Vehiculo | undefined> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM stock WHERE dominio = ${dominio} AND agencia_id = ${agenciaId}`;
+  return filas[0] ? filaAVehiculo(filas[0]) : undefined;
+}
+
+// Para el catálogo público y la publicación a canales externos (que ya
+// resuelve la agencia dueña por su cuenta) -> sin filtro de agencia.
+export async function buscarVehiculoPublico(dominio: string): Promise<Vehiculo | undefined> {
   await asegurarTablas();
   const filas = await sql`SELECT * FROM stock WHERE dominio = ${dominio}`;
   return filas[0] ? filaAVehiculo(filas[0]) : undefined;
@@ -350,8 +430,8 @@ export async function agregarVehiculo(
   const existente = await sql`SELECT dominio FROM stock WHERE dominio = ${v.dominio}`;
   if (existente.length > 0) return null;
   await sql`
-    INSERT INTO stock (dominio, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentos, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
-    VALUES (${v.dominio}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, '{}'::jsonb, FALSE, NULL, 0, '[]'::jsonb)
+    INSERT INTO stock (dominio, agencia_id, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentos, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
+    VALUES (${v.dominio}, ${v.agencia_id}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, '{}'::jsonb, FALSE, NULL, 0, '[]'::jsonb)
   `;
   return {
     ...v,
@@ -368,61 +448,85 @@ export async function agregarVehiculo(
 // evidencia cargada, sin OCR ni validación automática del contenido.
 export async function setDocumentoVehiculo(
   dominio: string,
+  agenciaId: string,
   clave: string,
   documento: DocumentoVehiculo | null
 ): Promise<Vehiculo | null> {
   await asegurarTablas();
-  const actual = await buscarVehiculo(dominio);
+  const actual = await buscarVehiculo(dominio, agenciaId);
   if (!actual) return null;
   const documentos = { ...actual.documentos };
   if (documento) documentos[clave] = documento;
   else delete documentos[clave];
   const filas = await sql`
-    UPDATE stock SET documentos = ${JSON.stringify(documentos)}::jsonb WHERE dominio = ${dominio} RETURNING *
+    UPDATE stock SET documentos = ${JSON.stringify(documentos)}::jsonb
+    WHERE dominio = ${dominio} AND agencia_id = ${agenciaId} RETURNING *
   `;
   return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
-export async function agregarFotos(dominio: string, fotosBase64: string[]): Promise<Vehiculo | null> {
+export async function agregarFotos(dominio: string, agenciaId: string, fotosBase64: string[]): Promise<Vehiculo | null> {
   await asegurarTablas();
-  const actual = await buscarVehiculo(dominio);
+  const actual = await buscarVehiculo(dominio, agenciaId);
   if (!actual) return null;
   const fotos = [...actual.fotos, ...fotosBase64];
-  await sql`UPDATE stock SET fotos = ${JSON.stringify(fotos)}::jsonb WHERE dominio = ${dominio}`;
+  await sql`UPDATE stock SET fotos = ${JSON.stringify(fotos)}::jsonb WHERE dominio = ${dominio} AND agencia_id = ${agenciaId}`;
   return { ...actual, fotos };
 }
 
-export async function quitarFoto(dominio: string, indice: number): Promise<Vehiculo | null> {
+export async function quitarFoto(dominio: string, agenciaId: string, indice: number): Promise<Vehiculo | null> {
   await asegurarTablas();
-  const actual = await buscarVehiculo(dominio);
+  const actual = await buscarVehiculo(dominio, agenciaId);
   if (!actual) return null;
   const fotos = actual.fotos.filter((_, i) => i !== indice);
-  await sql`UPDATE stock SET fotos = ${JSON.stringify(fotos)}::jsonb WHERE dominio = ${dominio}`;
+  await sql`UPDATE stock SET fotos = ${JSON.stringify(fotos)}::jsonb WHERE dominio = ${dominio} AND agencia_id = ${agenciaId}`;
   return { ...actual, fotos };
 }
 
-export async function setDocumentacionValidada(dominio: string, validada: boolean): Promise<Vehiculo | null> {
+export async function setFichaTecnica(
+  dominio: string,
+  agenciaId: string,
+  // chasis es opcional acá -ya existía la columna (viene del OCR de
+  // cédula), esto solo agrega una forma de completarlo/corregirlo a mano
+  // cuando el vehículo se cargó por planilla o el OCR no lo leyó bien.
+  // Mercado Libre lo exige desde oct-2024 (ver lib/mercadolibre.ts).
+  datos: { version: string; combustible: string; puertas: string; chasis?: string }
+): Promise<Vehiculo | null> {
+  await asegurarTablas();
+  const actual = await sql`SELECT chasis FROM stock WHERE dominio = ${dominio} AND agencia_id = ${agenciaId}`;
+  const chasis = datos.chasis !== undefined ? datos.chasis : ((actual[0]?.chasis as string) || "");
+  const filas = await sql`
+    UPDATE stock SET version = ${datos.version}, combustible = ${datos.combustible}, puertas = ${datos.puertas}, chasis = ${chasis}
+    WHERE dominio = ${dominio} AND agencia_id = ${agenciaId} RETURNING *
+  `;
+  return filas[0] ? filaAVehiculo(filas[0]) : null;
+}
+
+export async function setDocumentacionValidada(dominio: string, agenciaId: string, validada: boolean): Promise<Vehiculo | null> {
   await asegurarTablas();
   const fecha = validada ? new Date().toISOString().slice(0, 10) : null;
   const filas = await sql`
     UPDATE stock SET documentacion_validada = ${validada}, documentacion_validada_fecha = ${fecha}
-    WHERE dominio = ${dominio} RETURNING *
+    WHERE dominio = ${dominio} AND agencia_id = ${agenciaId} RETURNING *
   `;
   return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
 export async function aplicarDatosDnrpa(
   dominio: string,
+  agenciaId: string,
   datos: { marca: string; modelo: string; anio: string }
 ): Promise<Vehiculo | null> {
   await asegurarTablas();
   const filas = await sql`
     UPDATE stock SET marca = ${datos.marca}, modelo = ${datos.modelo}, anio = ${datos.anio}
-    WHERE dominio = ${dominio} RETURNING *
+    WHERE dominio = ${dominio} AND agencia_id = ${agenciaId} RETURNING *
   `;
   return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
+// Sin filtro de agencia a propósito: la vista la incrementa un comprador
+// anónimo navegando el catálogo público, no la agencia dueña.
 export async function registrarVista(dominio: string): Promise<Vehiculo | null> {
   await asegurarTablas();
   const filas = await sql`
@@ -461,6 +565,7 @@ export async function crearAgencia(datos: {
   celular_operador?: string;
   telefono_fijo_codigo_area?: string;
   telefono_fijo_numero?: string;
+  password_hash: string;
 }): Promise<Agencia> {
   await asegurarTablas();
   const celularCodigoArea = (datos.celular_codigo_area || "").trim();
@@ -485,14 +590,55 @@ export async function crearAgencia(datos: {
   await sql`
     INSERT INTO agencias (
       id, razon_social, cuit, contacto_nombre, contacto_apellido, contacto_email, contacto_telefono,
-      celular_codigo_area, celular_numero, celular_operador, telefono_fijo_codigo_area, telefono_fijo_numero, fecha_alta
+      celular_codigo_area, celular_numero, celular_operador, telefono_fijo_codigo_area, telefono_fijo_numero, fecha_alta, password_hash
     )
     VALUES (
       ${agencia.id}, ${agencia.razon_social}, ${agencia.cuit}, ${agencia.contacto_nombre}, ${agencia.contacto_apellido}, ${agencia.contacto_email}, ${agencia.contacto_telefono},
-      ${agencia.celular_codigo_area}, ${agencia.celular_numero}, ${agencia.celular_operador}, ${agencia.telefono_fijo_codigo_area}, ${agencia.telefono_fijo_numero}, ${agencia.fecha_alta}
+      ${agencia.celular_codigo_area}, ${agencia.celular_numero}, ${agencia.celular_operador}, ${agencia.telefono_fijo_codigo_area}, ${agencia.telefono_fijo_numero}, ${agencia.fecha_alta}, ${datos.password_hash}
     )
   `;
   return agencia;
+}
+
+// --- Autenticación (sesiones propias, sin Clerk/NextAuth por ahora -ver
+// AutoNexo/CLAUDE.md "Auth: propio"- un token opaco guardado en Postgres,
+// no un JWT: así una sesión se puede invalidar de verdad borrando la fila,
+// en vez de esperar a que expire un token firmado que ya está afuera). ---
+
+export async function obtenerAgenciaPorEmailConHash(
+  email: string
+): Promise<(Agencia & { password_hash: string }) | undefined> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM agencias WHERE lower(contacto_email) = lower(${email})`;
+  if (!filas[0]) return undefined;
+  return { ...filaAAgencia(filas[0]), password_hash: filas[0].password_hash as string };
+}
+
+export type Sesion = { token: string; agenciaId: string | null; rol: "agencia" | "admin" };
+
+export async function crearSesion(agenciaId: string | null, rol: "agencia" | "admin"): Promise<string> {
+  await asegurarTablas();
+  const token = crypto.randomUUID() + crypto.randomUUID();
+  const expiraEn = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // 30 días
+  await sql`
+    INSERT INTO sesiones (token, agencia_id, rol, expira_en)
+    VALUES (${token}, ${agenciaId}, ${rol}, ${expiraEn.toISOString()})
+  `;
+  return token;
+}
+
+export async function obtenerSesion(token: string): Promise<Sesion | null> {
+  await asegurarTablas();
+  const filas = await sql`
+    SELECT token, agencia_id, rol FROM sesiones WHERE token = ${token} AND expira_en > now()
+  `;
+  if (!filas[0]) return null;
+  return { token: filas[0].token as string, agenciaId: filas[0].agencia_id as string | null, rol: filas[0].rol as "agencia" | "admin" };
+}
+
+export async function borrarSesion(token: string): Promise<void> {
+  await asegurarTablas();
+  await sql`DELETE FROM sesiones WHERE token = ${token}`;
 }
 
 export async function listarAgencias(): Promise<Agencia[]> {
@@ -580,6 +726,12 @@ export async function listarLeads(): Promise<Lead[]> {
   return filas.map(filaALead);
 }
 
+export async function obtenerLead(id: string): Promise<Lead | undefined> {
+  await asegurarTablas();
+  const filas = await sql`SELECT * FROM leads WHERE id = ${id}`;
+  return filas[0] ? filaALead(filas[0]) : undefined;
+}
+
 export async function actualizarEstadoLead(id: string, estado: Lead["estado"]): Promise<Lead | null> {
   await asegurarTablas();
   const filas = await sql`UPDATE leads SET estado = ${estado} WHERE id = ${id} RETURNING *`;
@@ -658,6 +810,7 @@ function filaAPublicacion(r: Record<string, unknown>): Publicacion {
     canal: r.canal as Canal,
     estado: r.estado as EstadoPublicacion,
     external_id: r.external_id as string,
+    permalink: (r.permalink as string) || "",
     error_msg: r.error_msg as string,
     actualizado_en: r.actualizado_en as string,
   };
@@ -669,20 +822,39 @@ export async function listarPublicaciones(dominio: string): Promise<Publicacion[
   return filas.map(filaAPublicacion);
 }
 
+// Para la pantalla "Canales externos": TODO lo publicado por la agencia en
+// cualquier plataforma, con el título del vehículo, para poder hacer
+// seguimiento sin tener que entrar vehículo por vehículo.
+export type PublicacionConVehiculo = Publicacion & { marca: string; modelo: string };
+
+export async function listarPublicacionesDeAgencia(agenciaId: string): Promise<PublicacionConVehiculo[]> {
+  await asegurarTablas();
+  const filas = await sql`
+    SELECT p.*, s.marca, s.modelo
+    FROM publicaciones p
+    JOIN stock s ON s.dominio = p.dominio
+    WHERE s.agencia_id = ${agenciaId}
+    ORDER BY p.actualizado_en DESC
+  `;
+  return filas.map((r) => ({ ...filaAPublicacion(r), marca: r.marca as string, modelo: r.modelo as string }));
+}
+
 export async function setPublicacion(datos: {
   dominio: string;
   canal: Canal;
   estado: EstadoPublicacion;
   external_id?: string;
+  permalink?: string;
   error_msg?: string;
 }): Promise<Publicacion> {
   await asegurarTablas();
   const filas = await sql`
-    INSERT INTO publicaciones (dominio, canal, estado, external_id, error_msg, actualizado_en)
-    VALUES (${datos.dominio}, ${datos.canal}, ${datos.estado}, ${datos.external_id || ""}, ${datos.error_msg || ""}, ${new Date().toISOString()})
+    INSERT INTO publicaciones (dominio, canal, estado, external_id, permalink, error_msg, actualizado_en)
+    VALUES (${datos.dominio}, ${datos.canal}, ${datos.estado}, ${datos.external_id || ""}, ${datos.permalink || ""}, ${datos.error_msg || ""}, ${new Date().toISOString()})
     ON CONFLICT (dominio, canal) DO UPDATE SET
       estado = EXCLUDED.estado,
       external_id = EXCLUDED.external_id,
+      permalink = CASE WHEN EXCLUDED.permalink = '' THEN publicaciones.permalink ELSE EXCLUDED.permalink END,
       error_msg = EXCLUDED.error_msg,
       actualizado_en = EXCLUDED.actualizado_en
     RETURNING *

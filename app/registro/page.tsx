@@ -18,6 +18,8 @@ export default function RegistroPage() {
   const [apellido, setApellido] = useState("");
   const [email, setEmail] = useState("");
   const [repetirEmail, setRepetirEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [repetirPassword, setRepetirPassword] = useState("");
   const [celularCodigoArea, setCelularCodigoArea] = useState("");
   const [celularNumero, setCelularNumero] = useState("");
   const [celularOperador, setCelularOperador] = useState("");
@@ -25,6 +27,8 @@ export default function RegistroPage() {
   const [fijoNumero, setFijoNumero] = useState("");
 
   const emailsNoCoinciden = repetirEmail.trim() !== "" && email.trim() !== repetirEmail.trim();
+  const passwordsNoCoinciden = repetirPassword !== "" && password !== repetirPassword;
+  const passwordMuyCorta = password.length > 0 && password.length < 8;
 
   const faltanDatos =
     !razonSocial.trim() ||
@@ -34,6 +38,10 @@ export default function RegistroPage() {
     !email.trim() ||
     !repetirEmail.trim() ||
     emailsNoCoinciden ||
+    !password ||
+    !repetirPassword ||
+    passwordsNoCoinciden ||
+    passwordMuyCorta ||
     !celularCodigoArea.trim() ||
     !celularNumero.trim() ||
     !celularOperador;
@@ -51,6 +59,7 @@ export default function RegistroPage() {
           contacto_nombre: nombre,
           contacto_apellido: apellido,
           contacto_email: email,
+          password,
           celular_codigo_area: celularCodigoArea,
           celular_numero: celularNumero,
           celular_operador: celularOperador,
@@ -166,6 +175,31 @@ export default function RegistroPage() {
                   }`}
                 />
                 {emailsNoCoinciden && <p className="mt-1 text-xs text-red-600">Los emails no coinciden.</p>}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Contraseña *</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Mínimo 8 caracteres"
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-blue-500 ${
+                    passwordMuyCorta ? "border-red-400" : "border-zinc-300"
+                  }`}
+                />
+                {passwordMuyCorta && <p className="mt-1 text-xs text-red-600">Tiene que tener al menos 8 caracteres.</p>}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-600">Repetir contraseña *</label>
+                <input
+                  type="password"
+                  value={repetirPassword}
+                  onChange={(e) => setRepetirPassword(e.target.value)}
+                  className={`w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-blue-500 ${
+                    passwordsNoCoinciden ? "border-red-400" : "border-zinc-300"
+                  }`}
+                />
+                {passwordsNoCoinciden && <p className="mt-1 text-xs text-red-600">Las contraseñas no coinciden.</p>}
               </div>
             </div>
           </div>
