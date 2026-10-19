@@ -867,7 +867,12 @@ export async function setPublicacion(datos: {
     VALUES (${datos.dominio}, ${datos.canal}, ${datos.estado}, ${datos.external_id || ""}, ${datos.permalink || ""}, ${datos.error_msg || ""}, ${new Date().toISOString()})
     ON CONFLICT (dominio, canal) DO UPDATE SET
       estado = EXCLUDED.estado,
-      external_id = EXCLUDED.external_id,
+      -- Igual que permalink: si no se pasó external_id, se conserva el que
+      -- ya había -si no, la escritura de transición "pendiente_aprobacion"
+      -- (antes de llamar a ML) lo pisaba con "" y el siguiente intento ya
+      -- no podía saber que el aviso ya existía en ML, creando un duplicado
+      -- en vez de actualizar el mismo ítem (encontrado en vivo).
+      external_id = CASE WHEN EXCLUDED.external_id = '' THEN publicaciones.external_id ELSE EXCLUDED.external_id END,
       permalink = CASE WHEN EXCLUDED.permalink = '' THEN publicaciones.permalink ELSE EXCLUDED.permalink END,
       error_msg = EXCLUDED.error_msg,
       actualizado_en = EXCLUDED.actualizado_en
