@@ -29,15 +29,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
   const accessToken = await tokenVigente();
-  const ids = ["MLA2211334167", "MLA2211864243"];
-  const resultados: Record<string, unknown> = {};
-  for (const id of ids) {
-    const res = await fetch(`https://api.mercadolibre.com/items/${id}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    resultados[id] = await res.json();
-  }
-  return NextResponse.json(resultados);
+  const userRes = await fetch(`https://api.mercadolibre.com/users/me`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const user = await userRes.json();
+  const infraccionesRes = await fetch(
+    `https://api.mercadolibre.com/marketplace/moderations/infractions/${user.id}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const infracciones = await infraccionesRes.json();
+  return NextResponse.json({ userId: user.id, infracciones });
 }
 
 export async function POST(req: NextRequest) {
