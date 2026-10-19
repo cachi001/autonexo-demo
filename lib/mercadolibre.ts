@@ -130,6 +130,32 @@ export type PublicarItemInput = {
   chasis: string;
 };
 
+// Trae el motivo real de por qué ML puso un ítem en revisión -confirmado en
+// vivo contra /moderations/last_moderation/$ITEM_ID-ITM (documentado en
+// developers.mercadolibre.com, "Moderaciones con pausado"). El campo
+// "evidence[].text_matched" suele traer el número exacto (ej. el precio
+// mínimo de mercado) que el mensaje de REASON no siempre repite -se lo
+// agregamos a la agencia para que sepa a qué valor corregir, no solo que
+// "el precio no es acorde al mercado".
+async function obtenerMotivoModeracion(itemId: string, accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_URL}/moderations/last_moderation/${itemId}-ITM`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      wordings?: { type: string; value: string }[];
+      evidence?: { text_matched: string }[];
+    }[];
+    const razon = data?.[0]?.wordings?.find((w) => w.type === "REASON")?.value;
+    const evidencia = data?.[0]?.evidence?.[0]?.text_matched;
+    if (!razon) return null;
+    return evidencia ? `${razon} (${evidencia})` : razon;
+  } catch {
+    return null;
+  }
+}
+
 export async function publicarItem(input: PublicarItemInput) {
   if (!input.version.trim() || !input.combustible.trim() || !input.puertas.trim()) {
     return {
@@ -221,6 +247,22 @@ export async function publicarItem(input: PublicarItemInput) {
   // éxito se decide por la presencia de un id real, no por res.ok (ML
   // devuelve HTTP fuera de 2xx para este estado aunque el ítem sí se creó).
   if (data?.id) {
+    // Pero "under_review" SÍ es un fracaso real para la agencia: el aviso
+    // queda creado pero oculto al público hasta corregirlo -mostrarlo como
+    // "Publicado" sería mentirle (encontrado en vivo: un Ford Fiesta con
+    // status "publicado" en AutoNexo que en mercadolibre.com.ar redirigía a
+    // "#redirectedFromVip", invisible). La causa real (ej. precio por debajo
+    // del piso de mercado para ese modelo/año, moderación
+    // "PRECIO_PROHIBIDO_MIN_MOT") se obtiene de /moderations/last_moderation
+    // -no hay endpoint de precio mínimo previo a publicar, así que se
+    // reacciona al resultado real en vez de adivinar antes.
+    if (data.status === "under_review") {
+      const motivo = await obtenerMotivoModeracion(data.id, input.accessToken);
+      return {
+        ok: false as const,
+        error: motivo || "Mercado Libre puso el aviso en revisión y no es visible para compradores todavía.",
+      };
+    }
     return { ok: true as const, externalId: data.id as string, permalink: data.permalink as string };
   }
   // ML devuelve el detalle exacto de qué atributo falta o está mal -se lo
