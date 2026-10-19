@@ -285,7 +285,7 @@ export async function publicarItem(input: PublicarItemInput) {
 export async function actualizarItem(
   itemId: string,
   accessToken: string,
-  cambios: { price?: number; title?: string }
+  cambios: { price?: number; title?: string; status?: "active" | "paused" | "closed" }
 ) {
   const res = await fetch(`${API_URL}/items/${itemId}`, {
     method: "PUT",

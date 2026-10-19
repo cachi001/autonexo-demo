@@ -13,6 +13,7 @@ import {
 import { COOKIE_SESION } from "@/lib/auth";
 import CanalLogo from "@/components/CanalLogo";
 import VerificarMlBoton from "@/components/VerificarMlBoton";
+import GestionMlBotones from "@/components/GestionMlBotones";
 import { humanizarError } from "@/lib/errores";
 
 const TODOS_LOS_CANALES: Canal[] = ["mercadolibre", "facebook", "instagram"];
@@ -24,7 +25,7 @@ const ESTADO_LABEL: Record<string, { texto: string; clase: string }> = {
   publicado: { texto: "Publicado", clase: "bg-emerald-50 text-emerald-700" },
   rechazado: { texto: "Rechazado", clase: "bg-red-50 text-red-700" },
   pausado: { texto: "Pausado", clase: "bg-zinc-100 text-zinc-600" },
-  // "nunca se creó nada en Mercado Libre" -rechazo total, distinto de
+  // "nunca se creó nada en Mercado Libre", rechazo total, distinto de
   // en_revision (sí se creó, pero ML lo tiene oculto hasta corregir algo).
   error: { texto: "No se pudo publicar", clase: "bg-red-50 text-red-700" },
   en_revision: { texto: "Oculto en revisión", clase: "bg-amber-50 text-amber-700" },
@@ -153,15 +154,16 @@ export default async function CanalesExternosPage() {
                             {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
                               <div
                                 className={`mt-1 max-w-xs text-xs leading-snug font-medium ${
-                                  estado === "en_revision" ? "text-amber-700" : "text-red-600"
+                                  estado === "en_revision" ? "text-amber-700" : "text-red-700"
                                 }`}
                               >
                                 {humanizarError(pub.error_msg)}
                               </div>
                             )}
-                            {c === "mercadolibre" && pub?.external_id && estado !== "sin_publicar" && (
-                              <div className="mt-1">
-                                <VerificarMlBoton dominio={v.dominio} />
+                            {c === "mercadolibre" && (
+                              <div className="mt-1 flex items-center gap-2">
+                                <GestionMlBotones dominio={v.dominio} estado={estado} />
+                                {pub?.external_id && estado !== "sin_publicar" && <VerificarMlBoton dominio={v.dominio} />}
                               </div>
                             )}
                           </td>
