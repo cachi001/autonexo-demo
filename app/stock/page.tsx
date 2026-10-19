@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Camera, FileText, Car, MessageCircle, Eye, CheckCircle2, ArrowRight, AlertTriangle,
 } from "lucide-react";
+import { humanizarError } from "@/lib/errores";
 
 type Vehiculo = {
   dominio: string; marca: string; modelo: string; anio: string; tipo: string;
@@ -53,7 +54,7 @@ export default function StockPage() {
                   : `${erroresPublicacion.length} publicaciones necesitan tu atención`}
               </div>
               <div className="truncate text-xs text-red-600">
-                {erroresPublicacion[0].marca} {erroresPublicacion[0].modelo} — {erroresPublicacion[0].error_msg}
+                {erroresPublicacion[0].marca} {erroresPublicacion[0].modelo} — {humanizarError(erroresPublicacion[0].error_msg)}
               </div>
             </div>
             <ArrowRight className="h-4 w-4 shrink-0 text-red-400" strokeWidth={2} />

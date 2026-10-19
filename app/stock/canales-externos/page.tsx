@@ -12,6 +12,7 @@ import {
 } from "@/lib/data";
 import { COOKIE_SESION } from "@/lib/auth";
 import CanalLogo from "@/components/CanalLogo";
+import { humanizarError } from "@/lib/errores";
 
 const TODOS_LOS_CANALES: Canal[] = ["mercadolibre", "facebook", "instagram"];
 const NOMBRE_CANAL: Record<Canal, string> = { mercadolibre: "Mercado Libre", facebook: "Facebook", instagram: "Instagram" };
@@ -150,7 +151,7 @@ export default async function CanalesExternosPage() {
                             </div>
                             {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
                               <div className="mt-0.5 max-w-xs whitespace-pre-wrap text-[11px] leading-relaxed text-red-600">
-                                {pub.error_msg}
+                                {humanizarError(pub.error_msg)}
                               </div>
                             )}
                           </td>

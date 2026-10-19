@@ -6,6 +6,7 @@ import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, Alert
 import { categorizarVehiculo, DOCUMENTOS_POR_CATEGORIA, LABEL_CATEGORIA } from "@/lib/documentos";
 import CanalLogo from "@/components/CanalLogo";
 import type { Canal } from "@/lib/data";
+import { humanizarError } from "@/lib/errores";
 
 type DocumentoVehiculo = { nombre: string; dataUrl: string };
 
@@ -649,7 +650,7 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
                         {label.texto}
                       </span>
                       {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
-                        <div className="mt-1 max-w-xs text-[11px] leading-relaxed whitespace-pre-wrap text-red-600">{pub.error_msg}</div>
+                        <div className="mt-1 max-w-xs text-[11px] leading-relaxed whitespace-pre-wrap text-red-600">{humanizarError(pub.error_msg)}</div>
                       )}
                     </div>
                   </div>

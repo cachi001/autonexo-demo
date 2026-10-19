@@ -26,9 +26,18 @@ const PATRONES: { test: RegExp; texto: string }[] = [
   },
 ];
 
+// Heurística simple para no re-envolver mensajes que esta misma plataforma
+// ya guardó en buen español (ej. el motivo de precio mínimo armado en
+// lib/mercadolibre.ts) -si tiene tildes/ñ o palabras típicas en español, se
+// asume legible y se deja tal cual. Si no, se asume técnico/inglés.
+function pareceEspanol(s: string): boolean {
+  return /[áéíóúñÁÉÍÓÚÑ]|precio|publicaci[oó]n|cuenta|vehículo|Mercado Libre|conexi[oó]n/i.test(s);
+}
+
 export function humanizarError(mensajeOriginal: string): string {
   const encontrado = PATRONES.find((p) => p.test.test(mensajeOriginal));
   if (encontrado) return encontrado.texto;
+  if (pareceEspanol(mensajeOriginal)) return mensajeOriginal;
   // No hay traducción puntual para este caso todavía -se enmarca en español
   // en vez de mostrar la jerga técnica sola, sin perder el detalle real por
   // si hace falta para soporte.
