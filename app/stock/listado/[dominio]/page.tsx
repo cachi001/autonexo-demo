@@ -90,6 +90,7 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   const [publicaciones, setPublicaciones] = useState<Publicacion[]>([]);
   const [publicando, setPublicando] = useState<string | null>(null);
   const [errorPublicar, setErrorPublicar] = useState("");
+  const [verificando, setVerificando] = useState(false);
 
   // --- Editar título/descripción + preview antes de publicar en Mercado
   // Libre -antes se publicaba directo con el título/descripción que ya
@@ -228,6 +229,16 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
       setErrorPublicar("No se pudo conectar con el servicio de publicación. Probá de nuevo.");
     } finally {
       setPublicando(null);
+    }
+  }
+
+  async function verificarEstadoReal() {
+    setVerificando(true);
+    try {
+      await fetch(`/api/stock/${encodeURIComponent(dominio)}/verificar-publicacion`, { method: "POST" });
+      await cargarCanalesYPublicaciones();
+    } finally {
+      setVerificando(false);
     }
   }
 
@@ -652,6 +663,17 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
                       >
                         Ver aviso <ExternalLink className="h-3 w-3" strokeWidth={2} />
                       </a>
+                    )}
+                    {c.id === "mercadolibre" && estado !== "sin_publicar" && (
+                      <button
+                        onClick={() => verificarEstadoReal()}
+                        disabled={verificando}
+                        className="flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 disabled:opacity-50"
+                        title="Si cancelaste o eliminaste el aviso desde la cuenta real de Mercado Libre, acá se actualiza"
+                      >
+                        {verificando ? <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} /> : <RefreshCw className="h-3 w-3" strokeWidth={2} />}
+                        Verificar estado real
+                      </button>
                     )}
                     {!conectado ? (
                       <span className="text-xs font-medium text-zinc-400">No conectado</span>

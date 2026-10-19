@@ -857,23 +857,31 @@ export async function setPublicacion(datos: {
   dominio: string;
   canal: Canal;
   estado: EstadoPublicacion;
-  external_id?: string;
-  permalink?: string;
+  // undefined = no tocar (conserva lo que ya había, ver el CASE WHEN de
+  // abajo); null = borrar explícitamente -se usa cuando "Verificar estado
+  // real" confirma que el aviso ya no existe en ML (lo cerraron/eliminaron
+  // desde la cuenta real), así no queda un external_id viejo apuntando a un
+  // ítem que ya no está.
+  external_id?: string | null;
+  permalink?: string | null;
   error_msg?: string;
 }): Promise<Publicacion> {
   await asegurarTablas();
+  const borrarExternalId = datos.external_id === null;
+  const borrarPermalink = datos.permalink === null;
   const filas = await sql`
     INSERT INTO publicaciones (dominio, canal, estado, external_id, permalink, error_msg, actualizado_en)
     VALUES (${datos.dominio}, ${datos.canal}, ${datos.estado}, ${datos.external_id || ""}, ${datos.permalink || ""}, ${datos.error_msg || ""}, ${new Date().toISOString()})
     ON CONFLICT (dominio, canal) DO UPDATE SET
       estado = EXCLUDED.estado,
-      -- Igual que permalink: si no se pasó external_id, se conserva el que
-      -- ya había -si no, la escritura de transición "pendiente_aprobacion"
+      -- Si no se pasó external_id (undefined), se conserva el que ya
+      -- había -si no, la escritura de transición "pendiente_aprobacion"
       -- (antes de llamar a ML) lo pisaba con "" y el siguiente intento ya
       -- no podía saber que el aviso ya existía en ML, creando un duplicado
-      -- en vez de actualizar el mismo ítem (encontrado en vivo).
-      external_id = CASE WHEN EXCLUDED.external_id = '' THEN publicaciones.external_id ELSE EXCLUDED.external_id END,
-      permalink = CASE WHEN EXCLUDED.permalink = '' THEN publicaciones.permalink ELSE EXCLUDED.permalink END,
+      -- en vez de actualizar el mismo ítem (encontrado en vivo). null SÍ
+      -- borra -ver comentario del parámetro arriba.
+      external_id = CASE WHEN ${borrarExternalId} THEN '' WHEN EXCLUDED.external_id = '' THEN publicaciones.external_id ELSE EXCLUDED.external_id END,
+      permalink = CASE WHEN ${borrarPermalink} THEN '' WHEN EXCLUDED.permalink = '' THEN publicaciones.permalink ELSE EXCLUDED.permalink END,
       error_msg = EXCLUDED.error_msg,
       actualizado_en = EXCLUDED.actualizado_en
     RETURNING *

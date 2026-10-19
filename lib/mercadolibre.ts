@@ -9,6 +9,8 @@
 // compra directa con envío) -usar buying_mode="classified" es lo que exige
 // la propia API para la categoría de autos, confirmado en su documentación
 // pública de categorías de vehículos.
+import { humanizarError } from "@/lib/errores";
+
 const SITE = "MLA";
 const AUTH_URL = "https://auth.mercadolibre.com.ar/authorization";
 const API_URL = "https://api.mercadolibre.com";
@@ -269,9 +271,10 @@ export async function publicarItem(input: PublicarItemInput) {
     return { ok: true as const, externalId: data.id as string, permalink: data.permalink as string };
   }
   // ML devuelve el detalle exacto de qué atributo falta o está mal -se lo
-  // mostramos a la agencia tal cual, no lo tapamos con un mensaje genérico.
+  // mostramos a la agencia, pero traducido (ver humanizarErrorML): el
+  // detalle crudo de ML viene en inglés incluso en el sitio argentino.
   const detalle = data?.cause?.map((c: { message?: string }) => c.message).join("; ") || data?.message || JSON.stringify(data);
-  return { ok: false as const, error: `Mercado Libre rechazó la publicación: ${detalle}` };
+  return { ok: false as const, error: humanizarError(detalle) };
 }
 
 // Actualiza precio/título de un ítem YA creado en ML -se usa cuando la
@@ -292,7 +295,7 @@ export async function actualizarItem(
   const data = await res.json();
   if (!res.ok) {
     const detalle = data?.cause?.map((c: { message?: string }) => c.message).join("; ") || data?.message || JSON.stringify(data);
-    return { ok: false as const, error: `Mercado Libre rechazó la actualización: ${detalle}` };
+    return { ok: false as const, error: humanizarError(detalle) };
   }
   if (data.status === "under_review") {
     const motivo = await obtenerMotivoModeracion(itemId, accessToken);
@@ -305,4 +308,29 @@ export async function actualizarItem(
     };
   }
   return { ok: true as const, externalId: itemId, permalink: data.permalink as string };
+}
+
+// Consulta el estado REAL de un ítem ya publicado -necesario para la
+// bidireccionalidad que pidió la agencia: si alguien cancela/elimina un
+// aviso desde la cuenta real de Mercado Libre (no desde AutoNexo), AutoNexo
+// no se entera solo -no hay webhook de borrado configurado todavía, así que
+// esto es el chequeo manual ("Verificar estado real") hasta que se sume
+// notificación push de ML.
+export async function obtenerEstadoItem(itemId: string, accessToken: string) {
+  const res = await fetch(`${API_URL}/items/${itemId}?attributes=id,status,sub_status,permalink`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (res.status === 404) {
+    return { existe: false as const };
+  }
+  const data = await res.json();
+  if (!res.ok) {
+    return { existe: false as const };
+  }
+  return {
+    existe: true as const,
+    status: data.status as string,
+    sub_status: (data.sub_status || []) as string[],
+    permalink: data.permalink as string,
+  };
 }

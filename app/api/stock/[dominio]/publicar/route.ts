@@ -55,14 +55,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
           cuenta_externa_id: conectado.cuenta_externa_id,
           cuenta_externa_nombre: conectado.cuenta_externa_nombre,
         });
-      } catch (e) {
-        const pub = await setPublicacion({
-          dominio: vehiculo.dominio,
-          canal,
-          estado: "error",
-          error_msg: "La conexión con Mercado Libre venció y no se pudo renovar -reconectá la cuenta en Conexiones.",
-        });
-        return NextResponse.json({ error: String(e), publicacion: pub }, { status: 502 });
+      } catch {
+        // El motivo real de por qué falló el refresh (String(e)) puede venir
+        // en inglés o ser jerga técnica de la API -se guarda el mismo
+        // mensaje en español tanto en la publicación como en la respuesta,
+        // nunca la excepción cruda (ver lib/errores.ts, mismo criterio para
+        // cualquier canal).
+        const mensaje = "La conexión con Mercado Libre venció y no se pudo renovar -reconectá la cuenta en Conexiones.";
+        const pub = await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "error", error_msg: mensaje });
+        return NextResponse.json({ error: mensaje, publicacion: pub }, { status: 502 });
       }
     }
 
