@@ -29,16 +29,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
   const accessToken = await tokenVigente();
-  const userRes = await fetch(`https://api.mercadolibre.com/users/me`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  const user = await userRes.json();
-  const infraccionesRes = await fetch(
-    `https://api.mercadolibre.com/marketplace/moderations/infractions/${user.id}`,
+  const modRes = await fetch(
+    `https://api.mercadolibre.com/moderations/last_moderation/MLA2211864243-ITM`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
-  const infracciones = await infraccionesRes.json();
-  return NextResponse.json({ userId: user.id, infracciones });
+  const moderacion = await modRes.json();
+  return NextResponse.json({ moderacion });
 }
 
 export async function POST(req: NextRequest) {
