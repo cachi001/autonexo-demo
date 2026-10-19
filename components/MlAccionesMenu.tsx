@@ -3,25 +3,36 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoreVertical, Loader2 } from "lucide-react";
+import { useToast } from "@/components/Toast";
+import ConfirmModal from "@/components/ConfirmModal";
 
 // Antes había un botón de texto por acción posible, pegado uno al lado del
-// otro en la tabla de Canales externos -con 2-3 acciones por fila (Pausar,
+// otro en la tabla de Canales externos, con 2 o 3 acciones por fila (Pausar,
 // Eliminar, Verificar) quedaba desordenado. Ahora es un solo ícono de tres
 // puntos con un menú desplegable, como cualquier tabla de gestión real.
 //
 // El bug más importante que esto corrige: antes, si una acción fallaba
 // (token vencido, error real de Mercado Libre, lo que sea), el fetch
-// simplemente no mostraba nada -la agencia hacía clic y no pasaba
+// simplemente no mostraba nada, la agencia hacía clic y no pasaba
 // absolutamente nada visible, sin ningún indicio de qué había fallado. Ahora
-// cualquier error de la llamada se muestra debajo del menú, en rojo, hasta
-// la próxima acción.
+// cualquier resultado (éxito o error) de la llamada se muestra como una
+// notificación flotante (toast), no como texto chico fácil de pasar por
+// alto. Pausar y Eliminar, además, piden confirmación explícita antes de
+// ejecutarse, porque tienen efecto real sobre un aviso que existe de verdad
+// en la cuenta de Mercado Libre de la agencia.
 type Props = { dominio: string; estado: string; tieneExternalId: boolean };
+
+type AccionPendiente =
+  | { tipo: "publicar" }
+  | { tipo: "ml"; accion: "pausar" | "reanudar" | "eliminar" | "cancelar" }
+  | { tipo: "verificar" };
 
 export default function MlAccionesMenu({ dominio, estado, tieneExternalId }: Props) {
   const router = useRouter();
+  const { mostrar } = useToast();
   const [abierto, setAbierto] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [confirmando, setConfirmando] = useState<AccionPendiente | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,59 +43,88 @@ export default function MlAccionesMenu({ dominio, estado, tieneExternalId }: Pro
     return () => document.removeEventListener("mousedown", alHacerClicAfuera);
   }, []);
 
-  async function ejecutar(fn: () => Promise<Response>) {
+  async function ejecutar(fn: () => Promise<Response>, mensajeExito: string) {
     setCargando(true);
-    setError(null);
     setAbierto(false);
+    setConfirmando(null);
     try {
       const res = await fn();
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setError((data && data.error) || "No se pudo completar la acción. Probá de nuevo.");
+        mostrar("error", (data && data.error) || "No se pudo completar la acción. Probá de nuevo.");
         return;
       }
+      mostrar("exito", mensajeExito);
       router.refresh();
     } catch {
-      setError("No se pudo conectar con el servicio. Revisá tu conexión y probá de nuevo.");
+      mostrar("error", "No se pudo conectar con el servicio. Revisá tu conexión y probá de nuevo.");
     } finally {
       setCargando(false);
     }
   }
 
   function publicar() {
-    return ejecutar(() =>
-      fetch(`/api/stock/${encodeURIComponent(dominio)}/publicar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ canal: "mercadolibre" }),
-      })
+    return ejecutar(
+      () =>
+        fetch(`/api/stock/${encodeURIComponent(dominio)}/publicar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ canal: "mercadolibre" }),
+        }),
+      "Publicado en Mercado Libre."
     );
   }
 
   function accionMl(accion: "pausar" | "reanudar" | "eliminar" | "cancelar") {
-    return ejecutar(() =>
-      fetch(`/api/stock/${encodeURIComponent(dominio)}/mercadolibre-accion`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accion }),
-      })
+    const mensajes: Record<typeof accion, string> = {
+      pausar: "Aviso pausado en Mercado Libre.",
+      reanudar: "Aviso reanudado en Mercado Libre.",
+      eliminar: "Aviso eliminado de Mercado Libre.",
+      cancelar: "Publicación cancelada.",
+    };
+    return ejecutar(
+      () =>
+        fetch(`/api/stock/${encodeURIComponent(dominio)}/mercadolibre-accion`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accion }),
+        }),
+      mensajes[accion]
     );
   }
 
   function verificar() {
-    return ejecutar(() => fetch(`/api/stock/${encodeURIComponent(dominio)}/verificar-publicacion`, { method: "POST" }));
+    return ejecutar(
+      () => fetch(`/api/stock/${encodeURIComponent(dominio)}/verificar-publicacion`, { method: "POST" }),
+      "Estado actualizado con lo real de Mercado Libre."
+    );
   }
 
-  const opciones: { label: string; onClick: () => void }[] = [];
-  if (estado === "sin_publicar") opciones.push({ label: "Publicar", onClick: publicar });
-  if (estado === "error" || estado === "en_revision") opciones.push({ label: "Reintentar", onClick: publicar });
-  if (estado === "error" && !tieneExternalId) opciones.push({ label: "Cancelar", onClick: () => accionMl("cancelar") });
-  if (estado === "publicado") opciones.push({ label: "Pausar", onClick: () => accionMl("pausar") });
-  if (estado === "pausado") opciones.push({ label: "Reanudar", onClick: () => accionMl("reanudar") });
-  if ((estado === "publicado" || estado === "pausado" || estado === "en_revision") && tieneExternalId) {
-    opciones.push({ label: "Eliminar", onClick: () => accionMl("eliminar") });
+  function confirmarYEjecutar(pendiente: AccionPendiente) {
+    if (pendiente.tipo === "ml" && (pendiente.accion === "pausar" || pendiente.accion === "eliminar")) {
+      setAbierto(false);
+      setConfirmando(pendiente);
+      return;
+    }
+    if (pendiente.tipo === "publicar") publicar();
+    else if (pendiente.tipo === "verificar") verificar();
+    else if (pendiente.tipo === "ml") accionMl(pendiente.accion);
   }
-  if (tieneExternalId && estado !== "sin_publicar") opciones.push({ label: "Verificar estado real", onClick: verificar });
+
+  const opciones: { label: string; pendiente: AccionPendiente }[] = [];
+  if (estado === "sin_publicar") opciones.push({ label: "Publicar", pendiente: { tipo: "publicar" } });
+  if (estado === "error" || estado === "en_revision") opciones.push({ label: "Reintentar", pendiente: { tipo: "publicar" } });
+  if (estado === "error" && !tieneExternalId) {
+    opciones.push({ label: "Cancelar", pendiente: { tipo: "ml", accion: "cancelar" } });
+  }
+  if (estado === "publicado") opciones.push({ label: "Pausar", pendiente: { tipo: "ml", accion: "pausar" } });
+  if (estado === "pausado") opciones.push({ label: "Reanudar", pendiente: { tipo: "ml", accion: "reanudar" } });
+  if ((estado === "publicado" || estado === "pausado" || estado === "en_revision") && tieneExternalId) {
+    opciones.push({ label: "Eliminar", pendiente: { tipo: "ml", accion: "eliminar" } });
+  }
+  if (tieneExternalId && estado !== "sin_publicar") {
+    opciones.push({ label: "Verificar estado real", pendiente: { tipo: "verificar" } });
+  }
 
   if (opciones.length === 0) return null;
 
@@ -103,7 +143,7 @@ export default function MlAccionesMenu({ dominio, estado, tieneExternalId }: Pro
           {opciones.map((o) => (
             <button
               key={o.label}
-              onClick={o.onClick}
+              onClick={() => confirmarYEjecutar(o.pendiente)}
               className="block w-full px-3 py-1.5 text-left text-xs font-medium text-zinc-700 hover:bg-zinc-50"
             >
               {o.label}
@@ -111,7 +151,24 @@ export default function MlAccionesMenu({ dominio, estado, tieneExternalId }: Pro
           ))}
         </div>
       )}
-      {error && <div className="mt-1 max-w-[220px] text-xs font-medium leading-snug text-red-700">{error}</div>}
+      {confirmando && confirmando.tipo === "ml" && confirmando.accion === "pausar" && (
+        <ConfirmModal
+          titulo="¿Pausar este aviso?"
+          mensaje="El vehículo deja de verse para compradores en Mercado Libre hasta que lo reanudes. Podés reanudarlo cuando quieras."
+          textoConfirmar="Pausar"
+          onConfirmar={() => accionMl("pausar")}
+          onCancelar={() => setConfirmando(null)}
+        />
+      )}
+      {confirmando && confirmando.tipo === "ml" && confirmando.accion === "eliminar" && (
+        <ConfirmModal
+          titulo="¿Eliminar este aviso?"
+          mensaje="Esto cierra el aviso de forma permanente en Mercado Libre. Si querés venderlo de nuevo ahí, vas a tener que publicarlo otra vez como un aviso nuevo."
+          textoConfirmar="Eliminar"
+          onConfirmar={() => accionMl("eliminar")}
+          onCancelar={() => setConfirmando(null)}
+        />
+      )}
     </div>
   );
 }

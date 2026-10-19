@@ -7,6 +7,7 @@ import { categorizarVehiculo, DOCUMENTOS_POR_CATEGORIA, LABEL_CATEGORIA } from "
 import CanalLogo from "@/components/CanalLogo";
 import type { Canal } from "@/lib/data";
 import { humanizarError } from "@/lib/errores";
+import { useToast } from "@/components/Toast";
 
 type DocumentoVehiculo = { nombre: string; dataUrl: string };
 
@@ -70,6 +71,7 @@ function formatoPrecio(p: string) {
 
 export default function DetalleVehiculoPage({ params }: { params: Promise<{ dominio: string }> }) {
   const { dominio } = use(params);
+  const { mostrar } = useToast();
   const [vehiculo, setVehiculo] = useState<Vehiculo | null>(null);
   const [fotoActiva, setFotoActiva] = useState(0);
   const [subiendo, setSubiendo] = useState(false);
@@ -223,11 +225,18 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
         body: JSON.stringify({ canal, ...overrides }),
       });
       const data = await res.json();
-      if (data.error) setErrorPublicar(data.error);
-      else setEditandoMl(false);
+      if (data.error) {
+        setErrorPublicar(data.error);
+        mostrar("error", humanizarError(data.error));
+      } else {
+        setEditandoMl(false);
+        mostrar("exito", `Publicado en ${canal === "mercadolibre" ? "Mercado Libre" : canal === "facebook" ? "Facebook" : "Instagram"}.`);
+      }
       await cargarCanalesYPublicaciones();
     } catch {
-      setErrorPublicar("No se pudo conectar con el servicio de publicación. Probá de nuevo.");
+      const mensaje = "No se pudo conectar con el servicio de publicación. Probá de nuevo.";
+      setErrorPublicar(mensaje);
+      mostrar("error", mensaje);
     } finally {
       setPublicando(null);
     }
@@ -240,12 +249,17 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
       const res = await fetch(`/api/stock/${encodeURIComponent(dominio)}/verificar-publicacion`, { method: "POST" });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setErrorPublicar((data && data.error) || "No se pudo verificar el estado real. Probá de nuevo.");
+        const mensaje = (data && data.error) || "No se pudo verificar el estado real. Probá de nuevo.";
+        setErrorPublicar(mensaje);
+        mostrar("error", mensaje);
         return;
       }
+      mostrar("exito", "Estado actualizado con lo real de Mercado Libre.");
       await cargarCanalesYPublicaciones();
     } catch {
-      setErrorPublicar("No se pudo conectar con el servicio. Revisá tu conexión y probá de nuevo.");
+      const mensaje = "No se pudo conectar con el servicio. Revisá tu conexión y probá de nuevo.";
+      setErrorPublicar(mensaje);
+      mostrar("error", mensaje);
     } finally {
       setVerificando(false);
     }

@@ -1,4 +1,4 @@
-// Integración real con la API de Mercado Libre (sitio MLA, Argentina) -no es
+// Integración real con la API de Mercado Libre (sitio MLA, Argentina), no es
 // un mock: son las mismas llamadas que haría cualquier integrador real.
 // Requiere una app creada en https://developers.mercadolibre.com.ar con
 // redirect URI https://autonexo-demo.vercel.app/api/canales/mercadolibre/callback,
@@ -6,7 +6,7 @@
 //
 // Por qué "classified" y no "buy_it_now": los vehículos en ML Argentina se
 // venden como aviso clasificado (el comprador contacta al vendedor, no hay
-// compra directa con envío) -usar buying_mode="classified" es lo que exige
+// compra directa con envío), usar buying_mode="classified" es lo que exige
 // la propia API para la categoría de autos, confirmado en su documentación
 // pública de categorías de vehículos.
 import { humanizarError } from "@/lib/errores";
@@ -53,7 +53,7 @@ export async function intercambiarCodigo(code: string, redirectUri: string) {
 }
 
 // El access_token de ML dura pocas horas (confirmado en vivo: "invalid
-// access token" en una conexión de la misma sesión de trabajo) -hace falta
+// access token" en una conexión de la misma sesión de trabajo), hace falta
 // renovarlo con el refresh_token antes de cada operación, no solo al
 // conectar. ML rota el refresh_token en cada uso (de un solo uso), por eso
 // se devuelve el nuevo junto con el access_token nuevo.
@@ -89,10 +89,10 @@ export async function obtenerUsuario(accessToken: string) {
 }
 
 // La categoría correcta (Autos, Camionetas y Suvs vs. Motos vs. Camiones,
-// etc.) depende del tipo de vehículo -se la pedimos a ML en vez de
+// etc.) depende del tipo de vehículo, se la pedimos a ML en vez de
 // harcodear un ID que podría estar mal para motos/camiones/acoplados.
 // `category_predictor/predict` (lo que usaba este archivo antes) está dado
-// de baja -devuelve 404 real, confirmado en vivo esta sesión-, el
+// de baja (devuelve 404 real, confirmado en vivo esta sesión), el
 // reemplazo vigente es `domain_discovery/search`, que devuelve una lista
 // de posibles dominios ordenada por relevancia; se toma el primero.
 export async function predecirCategoria(titulo: string): Promise<string | null> {
@@ -162,13 +162,13 @@ export async function publicarItem(input: PublicarItemInput) {
   if (!input.version.trim() || !input.combustible.trim() || !input.puertas.trim()) {
     return {
       ok: false as const,
-      error: "Faltan datos de la ficha técnica (versión, combustible o puertas) -obligatorios para publicar en Mercado Libre. Completalos en la ficha del vehículo.",
+      error: "Faltan datos de la ficha técnica (versión, combustible o puertas), obligatorios para publicar en Mercado Libre. Completalos en la ficha del vehículo.",
     };
   }
   if (input.chasis.trim().length < 6) {
     return {
       ok: false as const,
-      error: "Falta el chasis (o tiene menos de 6 caracteres) -obligatorio para publicar en Mercado Libre desde oct-2024. Completalo en la ficha del vehículo.",
+      error: "Falta el chasis (o tiene menos de 6 caracteres), obligatorio para publicar en Mercado Libre desde oct-2024. Completalo en la ficha del vehículo.",
     };
   }
 
@@ -304,7 +304,7 @@ export async function actualizarItem(
       enRevision: true as const,
       externalId: itemId,
       permalink: data.permalink as string,
-      error: motivo || "Mercado Libre sigue sin mostrar el aviso -revisalo de nuevo en unos minutos.",
+      error: motivo || "Mercado Libre sigue sin mostrar el aviso, revisalo de nuevo en unos minutos.",
     };
   }
   return { ok: true as const, externalId: itemId, permalink: data.permalink as string };
