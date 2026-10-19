@@ -235,9 +235,17 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
 
   async function verificarEstadoReal() {
     setVerificando(true);
+    setErrorPublicar("");
     try {
-      await fetch(`/api/stock/${encodeURIComponent(dominio)}/verificar-publicacion`, { method: "POST" });
+      const res = await fetch(`/api/stock/${encodeURIComponent(dominio)}/verificar-publicacion`, { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setErrorPublicar((data && data.error) || "No se pudo verificar el estado real. Probá de nuevo.");
+        return;
+      }
       await cargarCanalesYPublicaciones();
+    } catch {
+      setErrorPublicar("No se pudo conectar con el servicio. Revisá tu conexión y probá de nuevo.");
     } finally {
       setVerificando(false);
     }

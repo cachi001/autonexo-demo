@@ -12,8 +12,7 @@ import {
 } from "@/lib/data";
 import { COOKIE_SESION } from "@/lib/auth";
 import CanalLogo from "@/components/CanalLogo";
-import VerificarMlBoton from "@/components/VerificarMlBoton";
-import GestionMlBotones from "@/components/GestionMlBotones";
+import MlAccionesMenu from "@/components/MlAccionesMenu";
 import { humanizarError } from "@/lib/errores";
 
 const TODOS_LOS_CANALES: Canal[] = ["mercadolibre", "facebook", "instagram"];
@@ -150,6 +149,9 @@ export default async function CanalesExternosPage() {
                                   <ExternalLink className="h-2.5 w-2.5" strokeWidth={2} />
                                 </a>
                               )}
+                              {c === "mercadolibre" && (
+                                <MlAccionesMenu dominio={v.dominio} estado={estado} tieneExternalId={Boolean(pub?.external_id)} />
+                              )}
                             </div>
                             {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
                               <div
@@ -158,12 +160,6 @@ export default async function CanalesExternosPage() {
                                 }`}
                               >
                                 {humanizarError(pub.error_msg)}
-                              </div>
-                            )}
-                            {c === "mercadolibre" && (
-                              <div className="mt-1 flex items-center gap-2">
-                                <GestionMlBotones dominio={v.dominio} estado={estado} />
-                                {pub?.external_id && estado !== "sin_publicar" && <VerificarMlBoton dominio={v.dominio} />}
                               </div>
                             )}
                           </td>

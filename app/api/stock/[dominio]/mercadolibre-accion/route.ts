@@ -18,12 +18,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
   const agencia = await agenciaDesdeRequest(req);
   if (!agencia) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   const { dominio } = await params;
-  const { accion } = (await req.json()) as { accion: "pausar" | "reanudar" | "eliminar" };
+  const { accion } = (await req.json()) as { accion: "pausar" | "reanudar" | "eliminar" | "cancelar" };
 
   const vehiculo = await buscarVehiculo(decodeURIComponent(dominio), agencia.id);
   if (!vehiculo) return NextResponse.json({ error: `No se encontró el dominio '${dominio}'` }, { status: 404 });
 
   const publicaciones = await listarPublicaciones(vehiculo.dominio);
+  const publicacionMl = publicaciones.find((p) => p.canal === "mercadolibre");
+
+  // "cancelar" es solo para un estado "error" puro, donde nunca se creó nada
+  // en ML (no hay external_id) -ahí no hace falta ninguna llamada a la API,
+  // alcanza con borrar el error local para que la agencia pueda reintentar
+  // desde cero. Si ya existe un aviso real (en_revision/pausado/publicado),
+  // esto se rechaza a propósito -esos casos van por "Eliminar", que sí llama
+  // a ML, porque cancelar sin avisarle a ML dejaría un aviso real huérfano.
+  if (accion === "cancelar") {
+    if (publicacionMl?.external_id) {
+      return NextResponse.json(
+        { error: "Este aviso ya existe en Mercado Libre, no se puede cancelar sin eliminarlo ahí. Usá Eliminar." },
+        { status: 400 }
+      );
+    }
+    const pub = await setPublicacion({ dominio: vehiculo.dominio, canal: "mercadolibre", estado: "sin_publicar", error_msg: "" });
+    return NextResponse.json({ ok: true, publicacion: pub });
+  }
+
   const previaMl = publicaciones.find((p) => p.canal === "mercadolibre" && p.external_id);
   if (!previaMl) {
     return NextResponse.json({ error: "Este vehículo no tiene ningún aviso de Mercado Libre para gestionar." }, { status: 400 });
