@@ -90,11 +90,35 @@ export type ConexionMeta = {
 export async function conectarPrimeraPagina(code: string, redirectUri: string): Promise<ConexionMeta> {
   const tokenCorto = await obtenerTokenCortoPlazo(code, redirectUri);
   const { access_token: tokenLargo, expires_in } = await obtenerTokenLargoPlazo(tokenCorto);
-  const paginas = await obtenerPaginas(tokenLargo);
+  // El intercambio a token de larga duración (fb_exchange_token) puede
+  // devolver un token que ya no trae consigo las Páginas que la agencia
+  // seleccionó explícitamente en el picker de Facebook Login for Business
+  // (confirmado en vivo: la Página aparecía marcada en el picker, pero
+  // /me/accounts con el token largo devolvía 0 resultados). Por eso se
+  // reintenta con el token corto, que sí conserva ese alcance, antes de
+  // darla por perdida.
+  let paginas = await obtenerPaginas(tokenLargo);
+  let pageTokenEsDeCortaDuracion = false;
+  if (paginas.length === 0) {
+    paginas = await obtenerPaginas(tokenCorto);
+    pageTokenEsDeCortaDuracion = true;
+  }
   if (paginas.length === 0) {
     throw new Error("Tu cuenta de Meta no tiene ninguna Página de Facebook asociada. Creá una Página antes de conectar.");
   }
   const pagina = paginas[0];
+  // Si la Página se encontró con el token corto, su access_token hereda esa
+  // misma corta duración (horas, no 60 días) -se extiende también, para que
+  // no quede guardada una conexión que en los hechos vence casi enseguida.
+  if (pageTokenEsDeCortaDuracion) {
+    try {
+      const { access_token: pageTokenLargo } = await obtenerTokenLargoPlazo(pagina.access_token);
+      pagina.access_token = pageTokenLargo;
+    } catch {
+      // Si falla, se guarda igual con el token corto -mejor eso que no
+      // conectar nada; la agencia va a notar la desconexión y reconectar.
+    }
+  }
   // Meta a veces no devuelve expires_in en el intercambio a token de larga
   // duración (confirmado en vivo: provocaba "RangeError: Invalid time value"
   // al armar la fecha). Cuando falta, se asume la duración estándar de un
