@@ -20,10 +20,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
   if (!agencia) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
 
   const { dominio } = await params;
-  const { canal, titulo: tituloPersonalizado, descripcion: descripcionPersonalizada } = (await req.json()) as {
+  const {
+    canal,
+    titulo: tituloPersonalizado,
+    descripcion: descripcionPersonalizada,
+    mensaje: mensajePersonalizado,
+    fotoIndice,
+  } = (await req.json()) as {
     canal: Canal;
     titulo?: string;
     descripcion?: string;
+    mensaje?: string;
+    fotoIndice?: number;
   };
 
   const vehiculo = await buscarVehiculo(decodeURIComponent(dominio), agencia.id);
@@ -163,8 +171,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
       return NextResponse.json({ error: "El vehículo no tiene fotos cargadas, hace falta al menos una para publicar." }, { status: 400 });
     }
     await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "pendiente_aprobacion" });
-    const imagenUrl = `${req.nextUrl.origin}/api/stock/${encodeURIComponent(vehiculo.dominio)}/fotos/0`;
-    const mensaje = `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio} — $${vehiculo.precio}\n\n${vehiculo.descripcion}`;
+    const indice = fotoIndice !== undefined && fotoIndice >= 0 && fotoIndice < vehiculo.fotos.length ? fotoIndice : 0;
+    const imagenUrl = `${req.nextUrl.origin}/api/stock/${encodeURIComponent(vehiculo.dominio)}/fotos/${indice}`;
+    const mensaje =
+      mensajePersonalizado?.trim() ||
+      `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio} — $${vehiculo.precio}\n\n${vehiculo.descripcion}`;
 
     const resultado =
       canal === "facebook"
