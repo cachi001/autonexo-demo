@@ -31,6 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
     garantiaFabrica,
     garantiaMecanica,
     entregaDomicilio,
+    tipoMoto,
   } = (await req.json()) as {
     canal: Canal;
     titulo?: string;
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
     garantiaFabrica?: boolean;
     garantiaMecanica?: boolean;
     entregaDomicilio?: boolean;
+    tipoMoto?: string;
   };
 
   const vehiculo = await buscarVehiculo(decodeURIComponent(dominio), agencia.id);
@@ -113,6 +115,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
       puertas: vehiculo.puertas,
       dominio: vehiculo.dominio,
       chasis: vehiculo.chasis,
+      tipoMoto: tipoMoto?.trim() || undefined,
       listingTypeId: listingTypeId || "free",
       condicion: condicion === "new" ? "new" as const : "used" as const,
       ciudad: agenciaCompleta.ciudad,

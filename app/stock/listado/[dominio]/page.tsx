@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, AlertTriangle, ClipboardList, FileText, Share2, ExternalLink } from "lucide-react";
 import { categorizarVehiculo, DOCUMENTOS_POR_CATEGORIA, LABEL_CATEGORIA } from "@/lib/documentos";
 import CanalLogo from "@/components/CanalLogo";
+import CanalAccionesMenu from "@/components/CanalAccionesMenu";
 import type { Canal } from "@/lib/data";
 import { humanizarError } from "@/lib/errores";
 import { useToast } from "@/components/Toast";
@@ -91,26 +92,6 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   // --- Publicación a canales externos (Mercado Libre, Instagram, Facebook) ---
   const [canalesConectados, setCanalesConectados] = useState<string[]>([]);
   const [publicaciones, setPublicaciones] = useState<Publicacion[]>([]);
-  const [publicando, setPublicando] = useState<string | null>(null);
-  const [errorPublicar, setErrorPublicar] = useState("");
-  const [verificando, setVerificando] = useState(false);
-
-  // --- Editar título/descripción + preview antes de publicar en Mercado
-  // Libre -antes se publicaba directo con el título/descripción que ya
-  // tuviera cargado el vehículo, sin poder ajustarlo para ese aviso
-  // puntual ni ver cómo iba a quedar antes de confirmar. ---
-  const [editandoMl, setEditandoMl] = useState(false);
-  const [mlTitulo, setMlTitulo] = useState("");
-  const [mlDescripcion, setMlDescripcion] = useState("");
-
-  // --- Mismo problema para Facebook/Instagram: antes un solo clic publicaba
-  // directo, con un texto armado solo en el servidor y siempre la primera
-  // foto, sin que la agencia pudiera ver ni ajustar nada antes de postear de
-  // verdad en su cuenta real. Reusa el mismo patrón que Mercado Libre. ---
-  const [editandoCanal, setEditandoCanal] = useState<"facebook" | "instagram" | null>(null);
-  const [redesMensaje, setRedesMensaje] = useState("");
-  const [redesFotoIndice, setRedesFotoIndice] = useState(0);
-
   // --- Ficha técnica (version/combustible/puertas) -alineada con AutoClick,
   // la exige Mercado Libre para publicar en "Autos y Camionetas". Chasis se
   // suma acá también: ML exige desde oct-2024 patente + últimos 6 del
@@ -222,74 +203,6 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
     setPublicaciones(dataP.publicaciones || []);
   }
   useEffect(() => { cargarCanalesYPublicaciones(); }, [dominio]);
-
-  async function publicarEnCanal(
-    canal: string,
-    overrides?: { titulo?: string; descripcion?: string; mensaje?: string; fotoIndice?: number }
-  ) {
-    setPublicando(canal);
-    setErrorPublicar("");
-    try {
-      const res = await fetch(`/api/stock/${encodeURIComponent(dominio)}/publicar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ canal, ...overrides }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        setErrorPublicar(data.error);
-        mostrar("error", humanizarError(data.error));
-      } else {
-        setEditandoMl(false);
-        setEditandoCanal(null);
-        mostrar("exito", `Publicado en ${canal === "mercadolibre" ? "Mercado Libre" : canal === "facebook" ? "Facebook" : "Instagram"}.`);
-      }
-      await cargarCanalesYPublicaciones();
-    } catch {
-      const mensaje = "No se pudo conectar con el servicio de publicación. Probá de nuevo.";
-      setErrorPublicar(mensaje);
-      mostrar("error", mensaje);
-    } finally {
-      setPublicando(null);
-    }
-  }
-
-  async function verificarEstadoReal() {
-    setVerificando(true);
-    setErrorPublicar("");
-    try {
-      const res = await fetch(`/api/stock/${encodeURIComponent(dominio)}/verificar-publicacion`, { method: "POST" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        const mensaje = (data && data.error) || "No se pudo verificar el estado real. Probá de nuevo.";
-        setErrorPublicar(mensaje);
-        mostrar("error", mensaje);
-        return;
-      }
-      mostrar("exito", "Estado actualizado con lo real de Mercado Libre.");
-      await cargarCanalesYPublicaciones();
-    } catch {
-      const mensaje = "No se pudo conectar con el servicio. Revisá tu conexión y probá de nuevo.";
-      setErrorPublicar(mensaje);
-      mostrar("error", mensaje);
-    } finally {
-      setVerificando(false);
-    }
-  }
-
-  function abrirEdicionMl() {
-    if (!vehiculo) return;
-    setMlTitulo(`${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio}`.slice(0, 60));
-    setMlDescripcion(vehiculo.descripcion || "");
-    setEditandoMl(true);
-  }
-
-  function abrirEdicionRedes(canal: "facebook" | "instagram") {
-    if (!vehiculo) return;
-    setRedesMensaje(`${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio} — ${formatoPrecio(vehiculo.precio)}\n\n${vehiculo.descripcion}`);
-    setRedesFotoIndice(0);
-    setEditandoCanal(canal);
-  }
 
   async function subirFotos(files: FileList) {
     setSubiendo(true);
@@ -669,12 +582,6 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
             Cada canal se publica por separado, con un botón explícito — nunca automático. Las cuentas se
             conectan desde <Link href="/stock/canales" className="underline">Conexiones</Link>.
           </p>
-          {errorPublicar && (
-            <div className="mb-3 flex items-start gap-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
-              <div className="text-xs">{errorPublicar}</div>
-            </div>
-          )}
           <div className="space-y-2">
             {CANALES.map((c) => {
               const pub = publicaciones.find((p) => p.canal === c.id);
@@ -712,37 +619,33 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
                         Ver aviso <ExternalLink className="h-3 w-3" strokeWidth={2} />
                       </a>
                     )}
-                    {c.id === "mercadolibre" && estado !== "sin_publicar" && (
-                      <button
-                        onClick={() => verificarEstadoReal()}
-                        disabled={verificando}
-                        className="flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 disabled:opacity-50"
-                        title="Si cancelaste o eliminaste el aviso desde la cuenta real de Mercado Libre, acá se actualiza"
-                      >
-                        {verificando ? <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} /> : <RefreshCw className="h-3 w-3" strokeWidth={2} />}
-                        Verificar estado real
-                      </button>
-                    )}
                     {!conectado ? (
                       <span className="text-xs font-medium text-zinc-400">No conectado</span>
                     ) : estado === "publicado" ? (
                       <button disabled className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white opacity-50">
                         ✓ Publicado
                       </button>
-                    ) : c.id === "mercadolibre" ? (
-                      <button
-                        onClick={abrirEdicionMl}
-                        className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
-                      >
-                        Publicar
-                      </button>
                     ) : (
-                      <button
-                        onClick={() => abrirEdicionRedes(c.id as "facebook" | "instagram")}
-                        className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
-                      >
-                        Publicar
-                      </button>
+                      // Mismo componente que usa /stock/canales-externos -antes
+                      // esta página tenía su propio mini-formulario de ML
+                      // duplicado, sin tipo de publicación, ubicación ni tipo
+                      // de moto (quedó desactualizado cuando se mejoró el
+                      // modal compartido). Un solo formulario, no dos.
+                      <CanalAccionesMenu
+                        dominio={dominio}
+                        canal={c.id}
+                        estado={estado}
+                        tieneExternalId={Boolean(pub?.external_id)}
+                        vehiculo={{
+                          marca: vehiculo.marca,
+                          modelo: vehiculo.modelo,
+                          anio: vehiculo.anio,
+                          precio: vehiculo.precio,
+                          descripcion: vehiculo.descripcion,
+                          fotos: vehiculo.fotos,
+                          tipo: vehiculo.tipo,
+                        }}
+                      />
                     )}
                   </div>
                 </div>
@@ -750,152 +653,6 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
             })}
           </div>
 
-          {editandoMl && vehiculo && (
-            <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-              <h3 className="mb-3 text-sm font-semibold text-zinc-800">Editar antes de publicar en Mercado Libre</h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Título (máx. 60 caracteres)</label>
-                    <input
-                      value={mlTitulo}
-                      onChange={(e) => setMlTitulo(e.target.value.slice(0, 60))}
-                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
-                    />
-                    <div className="mt-0.5 text-right text-[11px] text-zinc-400">{mlTitulo.length}/60</div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Descripción</label>
-                    <textarea
-                      value={mlDescripcion}
-                      onChange={(e) => setMlDescripcion(e.target.value)}
-                      rows={5}
-                      placeholder="Service al día, único dueño, etc."
-                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Preview: igual estructura visual que un aviso real de ML
-                    (foto + título + precio + ubicación + descripción) -no
-                    había ninguna forma de ver esto antes de publicar. */}
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Vista previa del aviso</label>
-                  <div className="overflow-hidden rounded-lg border border-zinc-300 bg-white">
-                    <div className="flex h-40 items-center justify-center bg-zinc-100">
-                      {vehiculo.fotos[0] ? (
-                        <img src={vehiculo.fotos[0]} alt={mlTitulo} className="h-full w-full object-cover" />
-                      ) : (
-                        <Camera className="h-8 w-8 text-zinc-300" strokeWidth={1.5} />
-                      )}
-                    </div>
-                    <div className="p-3">
-                      <div className="text-sm font-medium text-zinc-800">{mlTitulo || "(sin título)"}</div>
-                      <div className="mt-1 text-lg font-bold text-zinc-900">{formatoPrecio(vehiculo.precio)}</div>
-                      <div className="mt-0.5 text-xs text-zinc-400">Mendoza, Mendoza</div>
-                      {mlDescripcion && (
-                        <p className="mt-2 whitespace-pre-wrap text-xs text-zinc-600">{mlDescripcion}</p>
-                      )}
-                    </div>
-                  </div>
-                  {vehiculo.fotos.length === 0 && (
-                    <p className="mt-1 text-[11px] text-amber-600">Este vehículo no tiene fotos — hace falta al menos una para publicar.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center gap-2">
-                <button
-                  onClick={() => publicarEnCanal("mercadolibre", { titulo: mlTitulo, descripcion: mlDescripcion })}
-                  disabled={publicando === "mercadolibre" || !mlTitulo.trim() || vehiculo.fotos.length === 0}
-                  className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {publicando === "mercadolibre" && <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />}
-                  {publicando === "mercadolibre" ? "Publicando..." : "Confirmar y publicar"}
-                </button>
-                <button onClick={() => setEditandoMl(false)} className="text-xs font-medium text-zinc-500 hover:text-zinc-700">
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          )}
-
-          {editandoCanal && vehiculo && (
-            <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-              <h3 className="mb-3 text-sm font-semibold text-zinc-800">
-                Editar antes de publicar en {editandoCanal === "facebook" ? "Facebook" : "Instagram"}
-              </h3>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Texto de la publicación</label>
-                    <textarea
-                      value={redesMensaje}
-                      onChange={(e) => setRedesMensaje(e.target.value)}
-                      rows={6}
-                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  {vehiculo.fotos.length > 0 && (
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-zinc-600">Elegir foto</label>
-                      <div className="flex flex-wrap gap-2">
-                        {vehiculo.fotos.map((foto, i) => (
-                          <button
-                            key={i}
-                            onClick={() => setRedesFotoIndice(i)}
-                            className={`h-14 w-20 overflow-hidden rounded-md border-2 ${
-                              redesFotoIndice === i ? "border-blue-500" : "border-transparent"
-                            }`}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={foto} alt="" className="h-full w-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Preview simple de un post de red social: foto + texto. */}
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Vista previa de la publicación</label>
-                  <div className="overflow-hidden rounded-lg border border-zinc-300 bg-white">
-                    <div className="flex h-40 items-center justify-center bg-zinc-100">
-                      {vehiculo.fotos[redesFotoIndice] ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={vehiculo.fotos[redesFotoIndice]} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <Camera className="h-8 w-8 text-zinc-300" strokeWidth={1.5} />
-                      )}
-                    </div>
-                    <div className="p-3">
-                      <p className="whitespace-pre-wrap text-xs text-zinc-700">{redesMensaje || "(sin texto)"}</p>
-                    </div>
-                  </div>
-                  {vehiculo.fotos.length === 0 && (
-                    <p className="mt-1 text-[11px] text-amber-600">Este vehículo no tiene fotos, hace falta al menos una para publicar.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center gap-2">
-                <button
-                  onClick={() =>
-                    publicarEnCanal(editandoCanal, { mensaje: redesMensaje, fotoIndice: redesFotoIndice })
-                  }
-                  disabled={publicando === editandoCanal || !redesMensaje.trim() || vehiculo.fotos.length === 0}
-                  className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {publicando === editandoCanal && <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />}
-                  {publicando === editandoCanal ? "Publicando..." : "Confirmar y publicar"}
-                </button>
-                <button onClick={() => setEditandoCanal(null)} className="text-xs font-medium text-zinc-500 hover:text-zinc-700">
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Documentación requerida según el tipo de vehículo — solo evidencia cargada, sin OCR ni validación automática */}

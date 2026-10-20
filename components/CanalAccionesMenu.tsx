@@ -27,7 +27,7 @@ import type { Canal } from "@/lib/data";
 // notificación flotante (toast). Pausar y Eliminar, además, piden
 // confirmación explícita antes de ejecutarse, porque tienen efecto real
 // sobre un aviso que existe de verdad en la cuenta de Mercado Libre.
-type VehiculoResumen = { marca: string; modelo: string; anio: string; precio: string; descripcion: string; fotos: string[] };
+type VehiculoResumen = { marca: string; modelo: string; anio: string; precio: string; descripcion: string; fotos: string[]; tipo?: string };
 type Props = { dominio: string; canal: Canal; estado: string; tieneExternalId: boolean; vehiculo: VehiculoResumen };
 
 type AccionPendiente =

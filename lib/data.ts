@@ -616,6 +616,11 @@ export async function crearAgencia(datos: {
     celular_operador: (datos.celular_operador || "").trim(),
     telefono_fijo_codigo_area: (datos.telefono_fijo_codigo_area || "").trim(),
     telefono_fijo_numero: (datos.telefono_fijo_numero || "").trim(),
+    // Se completan después en Datos de la agencia -no se piden en el alta
+    // inicial, igual que el resto de los campos opcionales de arriba.
+    ciudad: "",
+    provincia_id: "",
+    provincia_nombre: "",
     fecha_alta: new Date().toISOString().slice(0, 10),
   };
   await sql`

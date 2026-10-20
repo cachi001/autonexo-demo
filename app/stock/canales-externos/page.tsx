@@ -161,6 +161,7 @@ export default async function CanalesExternosPage() {
                                   precio: v.precio,
                                   descripcion: v.descripcion,
                                   fotos: v.fotos,
+                                  tipo: v.tipo,
                                 }}
                               />
                             </div>

@@ -175,19 +175,28 @@ export type PublicarItemInput = {
   // Ficha técnica -alineada con AutoClick (version/combustible ya existen
   // ahí, puertas es nuevo en los dos). ML las exige como atributos
   // obligatorios de la categoría "Autos y Camionetas" (TRIM/FUEL_TYPE/DOORS,
-  // confirmado en vivo contra /categories/MLA1744/attributes).
-  version: string;
-  combustible: string;
-  puertas: string;
+  // confirmado en vivo contra /categories/MLA1744/attributes) -SOLO para
+  // autos. Confirmado en vivo el 2026-10-20 que la categoría Motos
+  // (MLA1763) no tiene estos tres atributos en absoluto, ni como
+  // obligatorios ni como opcionales reconocidos -mandarlos para una moto no
+  // tiene sentido. Por eso quedan opcionales acá, la validación real está en
+  // publicarItem() y depende de input.tipoMoto (si viene, es moto).
+  version?: string;
+  combustible?: string;
+  puertas?: string;
   // Desde oct-2024, ML Argentina exige patente y los últimos 6 caracteres
-  // del chasis/VIN al publicar o actualizar un vehículo -confirmado por
-  // fuente oficial (developers.mercadolibre.com, "Publica vehículos").
-  // Encontrado como causa real de "under_review / waiting_for_patch" en un
-  // aviso publicado esta sesión sin estos dos campos. AutoNexo ya tiene
-  // ambos datos (vienen del OCR de cédula o se cargan a mano en la ficha
-  // técnica) -no hace falta pedirle nada nuevo a la agencia, solo mandarlos.
+  // del chasis/VIN al publicar o actualizar un AUTO -confirmado por fuente
+  // oficial (developers.mercadolibre.com, "Publica vehículos"). Confirmado
+  // en vivo que VIN_LAST_DIGITS no existe como atributo en la categoría
+  // Motos, así que esta regla es específica de autos.
   dominio: string;
-  chasis: string;
+  chasis?: string;
+  // Si viene con valor, el vehículo se publica como MOTO (categoría
+  // MLA1763): MOTO_TYPE es el único atributo realmente obligatorio ahí,
+  // confirmado en vivo contra /categories/MLA1763/attributes (16 valores
+  // reales: On-Off, Scooters, Naked, etc, ver lib/moto.ts). Si viene vacío o
+  // undefined, se publica con el esquema de autos (comportamiento previo).
+  tipoMoto?: string;
 };
 
 // Trae el motivo real de por qué ML puso un ítem en revisión -confirmado en
@@ -217,17 +226,26 @@ async function obtenerMotivoModeracion(itemId: string, accessToken: string): Pro
 }
 
 export async function publicarItem(input: PublicarItemInput) {
-  if (!input.version.trim() || !input.combustible.trim() || !input.puertas.trim()) {
-    return {
-      ok: false as const,
-      error: "Faltan datos de la ficha técnica (versión, combustible o puertas), obligatorios para publicar en Mercado Libre. Completalos en la ficha del vehículo.",
-    };
-  }
-  if (input.chasis.trim().length < 6) {
-    return {
-      ok: false as const,
-      error: "Falta el chasis (o tiene menos de 6 caracteres), obligatorio para publicar en Mercado Libre desde oct-2024. Completalo en la ficha del vehículo.",
-    };
+  const esMoto = Boolean(input.tipoMoto?.trim());
+  if (esMoto) {
+    // Para motos, MOTO_TYPE es el único atributo realmente obligatorio que
+    // no sea marca/modelo/año/km -confirmado en vivo, ver lib/moto.ts.
+    if (!input.tipoMoto?.trim()) {
+      return { ok: false as const, error: "Falta el tipo de moto, obligatorio para publicar en Mercado Libre." };
+    }
+  } else {
+    if (!input.version?.trim() || !input.combustible?.trim() || !input.puertas?.trim()) {
+      return {
+        ok: false as const,
+        error: "Faltan datos de la ficha técnica (versión, combustible o puertas), obligatorios para publicar en Mercado Libre. Completalos en la ficha del vehículo.",
+      };
+    }
+    if (!input.chasis || input.chasis.trim().length < 6) {
+      return {
+        ok: false as const,
+        error: "Falta el chasis (o tiene menos de 6 caracteres), obligatorio para publicar en Mercado Libre desde oct-2024. Completalo en la ficha del vehículo.",
+      };
+    }
   }
   if (!input.ciudad.trim() || !input.provinciaId.trim()) {
     return {
@@ -279,20 +297,30 @@ export async function publicarItem(input: PublicarItemInput) {
       // número pelado, exige la unidad pegada al valor (confirmado en vivo:
       // "The provided unit is not valid... [km]").
       { id: "KILOMETERS", value_name: `${input.km} km` },
-      { id: "TRIM", value_name: input.version },
-      { id: "FUEL_TYPE", value_name: input.combustible },
-      { id: "DOORS", value_name: input.puertas },
-      // Patente y últimos 6 del chasis -obligatorios en MLA desde oct-2024
-      // (ver comentario en PublicarItemInput). LICENSE_PLATE va sin
+      // LICENSE_PLATE existe en ambas categorías (auto y moto), va sin
       // guión/espacios, como se guarda el dominio en el stock.
       { id: "LICENSE_PLATE", value_name: input.dominio.toUpperCase().replace(/[\s-]/g, "") },
-      { id: "VIN_LAST_DIGITS", value_name: input.chasis.trim().slice(-6).toUpperCase() },
-      // Garantía y entrega a domicilio -opcionales, elegidos por la agencia.
-      // Confirmado en vivo (GET /categories/MLA1744/attributes) que estos
-      // tres existen de verdad para la categoría de autos.
-      { id: "WITH_FACTORY_WARRANTY", value_name: input.garantiaFabrica ? "Sí" : "No" },
-      { id: "WITH_MECHANICAL_WARRANTY", value_name: input.garantiaMecanica ? "Sí" : "No" },
-      { id: "CAR_DELIVERY", value_name: input.entregaDomicilio ? "Sí" : "No" },
+      // A partir de acá, todo lo que sigue es específico de cada categoría
+      // -confirmado en vivo que TRIM/FUEL_TYPE/DOORS/VIN_LAST_DIGITS no
+      // existen en la categoría Motos (MLA1763), y MOTO_TYPE no existe en
+      // Autos (MLA1744). Mandar el atributo equivocado para la categoría
+      // rechaza la publicación completa, no solo ese campo.
+      ...(esMoto
+        ? [{ id: "MOTO_TYPE", value_name: input.tipoMoto as string }]
+        : [
+            { id: "TRIM", value_name: input.version as string },
+            { id: "FUEL_TYPE", value_name: input.combustible as string },
+            { id: "DOORS", value_name: input.puertas as string },
+            // Últimos 6 del chasis -obligatorio en MLA desde oct-2024 para
+            // autos (ver comentario en PublicarItemInput).
+            { id: "VIN_LAST_DIGITS", value_name: (input.chasis as string).trim().slice(-6).toUpperCase() },
+            // Garantía y entrega a domicilio -opcionales, elegidos por la
+            // agencia. Confirmado en vivo (GET /categories/MLA1744/attributes)
+            // que estos tres existen de verdad para la categoría de autos.
+            { id: "WITH_FACTORY_WARRANTY", value_name: input.garantiaFabrica ? "Sí" : "No" },
+            { id: "WITH_MECHANICAL_WARRANTY", value_name: input.garantiaMecanica ? "Sí" : "No" },
+            { id: "CAR_DELIVERY", value_name: input.entregaDomicilio ? "Sí" : "No" },
+          ]),
     ],
   };
 

@@ -5,6 +5,7 @@ import { Camera, Loader2, X, ThumbsUp, MessageCircle, Send, Heart, Bookmark, Ale
 import Link from "next/link";
 import CanalLogo from "@/components/CanalLogo";
 import type { Canal } from "@/lib/data";
+import { TIPOS_MOTO } from "@/lib/moto";
 
 // Antes era un panel genérico sin identidad: mismo gris para los tres
 // canales, sin ningún indicio visual de qué red social es, y la "vista
@@ -13,7 +14,7 @@ import type { Canal } from "@/lib/data";
 // cada canal tiene su acento de color real, y la vista previa imita la
 // estructura real de un post (encabezado de página + foto + caption + barra
 // de reacciones) o de un aviso de ML (foto + título + precio + ubicación).
-type VehiculoResumen = { marca: string; modelo: string; anio: string; precio: string; descripcion: string; fotos: string[] };
+type VehiculoResumen = { marca: string; modelo: string; anio: string; precio: string; descripcion: string; fotos: string[]; tipo?: string };
 
 type Props = {
   canal: Canal;
@@ -29,6 +30,7 @@ type Props = {
     garantiaFabrica?: boolean;
     garantiaMecanica?: boolean;
     entregaDomicilio?: boolean;
+    tipoMoto?: string;
   }) => void;
   onCancelar: () => void;
 };
@@ -67,6 +69,11 @@ function formatoPrecio(p: string) {
 
 export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfirmar, onCancelar }: Props) {
   const esMl = canal === "mercadolibre";
+  // Motos piden atributos completamente distintos en Mercado Libre (sin
+  // versión/combustible/puertas, con MOTO_TYPE en su lugar) -confirmado en
+  // vivo contra /categories/MLA1763/attributes. Se detecta por el tipo ya
+  // cargado en el stock, no hace falta pedírselo de nuevo a la agencia.
+  const esMoto = /moto|cuatriciclo/i.test(vehiculo.tipo || "");
   const acento = ACENTO[canal];
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -91,6 +98,7 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
   const [garantiaFabrica, setGarantiaFabrica] = useState(false);
   const [garantiaMecanica, setGarantiaMecanica] = useState(false);
   const [entregaDomicilio, setEntregaDomicilio] = useState(false);
+  const [tipoMoto, setTipoMoto] = useState("");
 
   useEffect(() => {
     if (!esMl) return;
@@ -124,11 +132,27 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
   const deshabilitado =
     cargando ||
     sinFotos ||
-    (esMl ? !titulo.trim() || cargandoOpciones || !opcionesMl || ubicacionFalta || Boolean(errorOpciones) : !mensaje.trim());
+    (esMl
+      ? !titulo.trim() ||
+        cargandoOpciones ||
+        !opcionesMl ||
+        ubicacionFalta ||
+        Boolean(errorOpciones) ||
+        (esMoto && !tipoMoto)
+      : !mensaje.trim());
 
   function confirmar() {
-    if (esMl) onConfirmar({ titulo, descripcion, listingTypeId, condicion, garantiaFabrica, garantiaMecanica, entregaDomicilio });
-    else onConfirmar({ mensaje, fotoIndice });
+    if (esMl) {
+      onConfirmar({
+        titulo,
+        descripcion,
+        listingTypeId,
+        condicion,
+        ...(esMoto
+          ? { tipoMoto }
+          : { garantiaFabrica, garantiaMecanica, entregaDomicilio }),
+      });
+    } else onConfirmar({ mensaje, fotoIndice });
   }
 
   function cerrar() {
@@ -250,20 +274,40 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
                       </div>
                     </div>
 
-                    <div className="space-y-2.5">
-                      <label className="flex items-center gap-2.5 text-sm text-zinc-700">
-                        <input type="checkbox" checked={garantiaFabrica} onChange={(e) => setGarantiaFabrica(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
-                        Con garantía de fábrica
-                      </label>
-                      <label className="flex items-center gap-2.5 text-sm text-zinc-700">
-                        <input type="checkbox" checked={garantiaMecanica} onChange={(e) => setGarantiaMecanica(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
-                        Con garantía mecánica
-                      </label>
-                      <label className="flex items-center gap-2.5 text-sm text-zinc-700">
-                        <input type="checkbox" checked={entregaDomicilio} onChange={(e) => setEntregaDomicilio(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
-                        Entrega a domicilio
-                      </label>
-                    </div>
+                    {esMoto ? (
+                      // Motos no tienen garantía de fábrica/mecánica ni
+                      // entrega a domicilio como atributos en ML -en cambio
+                      // piden el tipo de moto (único atributo realmente
+                      // obligatorio además de marca/modelo/año/km).
+                      <div>
+                        <label className="mb-1.5 block text-sm font-semibold text-zinc-600">Tipo de moto</label>
+                        <select
+                          value={tipoMoto}
+                          onChange={(e) => setTipoMoto(e.target.value)}
+                          className={`w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm outline-none ring-4 ring-transparent transition ${acento.anillo}`}
+                        >
+                          <option value="">Elegí uno</option>
+                          {TIPOS_MOTO.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <label className="flex items-center gap-2.5 text-sm text-zinc-700">
+                          <input type="checkbox" checked={garantiaFabrica} onChange={(e) => setGarantiaFabrica(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
+                          Con garantía de fábrica
+                        </label>
+                        <label className="flex items-center gap-2.5 text-sm text-zinc-700">
+                          <input type="checkbox" checked={garantiaMecanica} onChange={(e) => setGarantiaMecanica(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
+                          Con garantía mecánica
+                        </label>
+                        <label className="flex items-center gap-2.5 text-sm text-zinc-700">
+                          <input type="checkbox" checked={entregaDomicilio} onChange={(e) => setEntregaDomicilio(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
+                          Entrega a domicilio
+                        </label>
+                      </div>
+                    )}
                   </>
                 )}
               </>
@@ -326,9 +370,15 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
                       <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">
                         {condicion === "new" ? "Nuevo" : "Usado"}
                       </span>
-                      {garantiaFabrica && <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">Garantía de fábrica</span>}
-                      {garantiaMecanica && <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">Garantía mecánica</span>}
-                      {entregaDomicilio && <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">Entrega a domicilio</span>}
+                      {esMoto
+                        ? tipoMoto && <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">{tipoMoto}</span>
+                        : (
+                          <>
+                            {garantiaFabrica && <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">Garantía de fábrica</span>}
+                            {garantiaMecanica && <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">Garantía mecánica</span>}
+                            {entregaDomicilio && <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">Entrega a domicilio</span>}
+                          </>
+                        )}
                     </div>
                   )}
                   <div className="text-base font-medium leading-snug text-zinc-800">{titulo || "(sin título)"}</div>
