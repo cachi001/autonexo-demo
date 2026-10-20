@@ -5,35 +5,44 @@ import { useRouter } from "next/navigation";
 import { MoreVertical, Loader2 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
+import type { Canal } from "@/lib/data";
 
 // Antes había un botón de texto por acción posible, pegado uno al lado del
 // otro en la tabla de Canales externos, con 2 o 3 acciones por fila (Pausar,
 // Eliminar, Verificar) quedaba desordenado. Ahora es un solo ícono de tres
 // puntos con un menú desplegable, como cualquier tabla de gestión real.
 //
+// Las acciones de pausar/reanudar/eliminar/verificar solo existen para
+// Mercado Libre, porque son las únicas que el backend soporta hoy (ver
+// lib/meta.ts, que solo tiene publicarEnFacebook/publicarEnInstagram, no
+// pausar/eliminar). Facebook e Instagram, por ahora, solo tienen
+// Publicar/Reintentar, igual que en la ficha de cada vehículo.
+//
 // El bug más importante que esto corrige: antes, si una acción fallaba
-// (token vencido, error real de Mercado Libre, lo que sea), el fetch
+// (token vencido, error real de la plataforma, lo que sea), el fetch
 // simplemente no mostraba nada, la agencia hacía clic y no pasaba
 // absolutamente nada visible, sin ningún indicio de qué había fallado. Ahora
 // cualquier resultado (éxito o error) de la llamada se muestra como una
-// notificación flotante (toast), no como texto chico fácil de pasar por
-// alto. Pausar y Eliminar, además, piden confirmación explícita antes de
-// ejecutarse, porque tienen efecto real sobre un aviso que existe de verdad
-// en la cuenta de Mercado Libre de la agencia.
-type Props = { dominio: string; estado: string; tieneExternalId: boolean };
+// notificación flotante (toast). Pausar y Eliminar, además, piden
+// confirmación explícita antes de ejecutarse, porque tienen efecto real
+// sobre un aviso que existe de verdad en la cuenta de Mercado Libre.
+type Props = { dominio: string; canal: Canal; estado: string; tieneExternalId: boolean };
 
 type AccionPendiente =
   | { tipo: "publicar" }
   | { tipo: "ml"; accion: "pausar" | "reanudar" | "eliminar" | "cancelar" }
   | { tipo: "verificar" };
 
-export default function MlAccionesMenu({ dominio, estado, tieneExternalId }: Props) {
+const NOMBRE_CANAL: Record<Canal, string> = { mercadolibre: "Mercado Libre", facebook: "Facebook", instagram: "Instagram" };
+
+export default function CanalAccionesMenu({ dominio, canal, estado, tieneExternalId }: Props) {
   const router = useRouter();
   const { mostrar } = useToast();
   const [abierto, setAbierto] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [confirmando, setConfirmando] = useState<AccionPendiente | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
+  const esMl = canal === "mercadolibre";
 
   useEffect(() => {
     function alHacerClicAfuera(e: MouseEvent) {
@@ -69,9 +78,9 @@ export default function MlAccionesMenu({ dominio, estado, tieneExternalId }: Pro
         fetch(`/api/stock/${encodeURIComponent(dominio)}/publicar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ canal: "mercadolibre" }),
+          body: JSON.stringify({ canal }),
         }),
-      "Publicado en Mercado Libre."
+      `Publicado en ${NOMBRE_CANAL[canal]}.`
     );
   }
 
@@ -114,15 +123,15 @@ export default function MlAccionesMenu({ dominio, estado, tieneExternalId }: Pro
   const opciones: { label: string; pendiente: AccionPendiente }[] = [];
   if (estado === "sin_publicar") opciones.push({ label: "Publicar", pendiente: { tipo: "publicar" } });
   if (estado === "error" || estado === "en_revision") opciones.push({ label: "Reintentar", pendiente: { tipo: "publicar" } });
-  if (estado === "error" && !tieneExternalId) {
+  if (esMl && estado === "error" && !tieneExternalId) {
     opciones.push({ label: "Cancelar", pendiente: { tipo: "ml", accion: "cancelar" } });
   }
-  if (estado === "publicado") opciones.push({ label: "Pausar", pendiente: { tipo: "ml", accion: "pausar" } });
-  if (estado === "pausado") opciones.push({ label: "Reanudar", pendiente: { tipo: "ml", accion: "reanudar" } });
-  if ((estado === "publicado" || estado === "pausado" || estado === "en_revision") && tieneExternalId) {
+  if (esMl && estado === "publicado") opciones.push({ label: "Pausar", pendiente: { tipo: "ml", accion: "pausar" } });
+  if (esMl && estado === "pausado") opciones.push({ label: "Reanudar", pendiente: { tipo: "ml", accion: "reanudar" } });
+  if (esMl && (estado === "publicado" || estado === "pausado" || estado === "en_revision") && tieneExternalId) {
     opciones.push({ label: "Eliminar", pendiente: { tipo: "ml", accion: "eliminar" } });
   }
-  if (tieneExternalId && estado !== "sin_publicar") {
+  if (esMl && tieneExternalId && estado !== "sin_publicar") {
     opciones.push({ label: "Verificar estado real", pendiente: { tipo: "verificar" } });
   }
 
@@ -134,7 +143,7 @@ export default function MlAccionesMenu({ dominio, estado, tieneExternalId }: Pro
         onClick={() => setAbierto((v) => !v)}
         disabled={cargando}
         className="flex h-6 w-6 items-center justify-center rounded border border-zinc-200 text-zinc-500 hover:bg-zinc-50 disabled:opacity-50"
-        aria-label="Acciones de Mercado Libre"
+        aria-label={`Acciones de ${NOMBRE_CANAL[canal]}`}
       >
         {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} /> : <MoreVertical className="h-3.5 w-3.5" strokeWidth={2} />}
       </button>

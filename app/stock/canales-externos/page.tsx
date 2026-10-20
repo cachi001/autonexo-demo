@@ -12,7 +12,7 @@ import {
 } from "@/lib/data";
 import { COOKIE_SESION } from "@/lib/auth";
 import CanalLogo from "@/components/CanalLogo";
-import MlAccionesMenu from "@/components/MlAccionesMenu";
+import CanalAccionesMenu from "@/components/CanalAccionesMenu";
 import { humanizarError } from "@/lib/errores";
 
 const TODOS_LOS_CANALES: Canal[] = ["mercadolibre", "facebook", "instagram"];
@@ -149,9 +149,7 @@ export default async function CanalesExternosPage() {
                                   <ExternalLink className="h-2.5 w-2.5" strokeWidth={2} />
                                 </a>
                               )}
-                              {c === "mercadolibre" && (
-                                <MlAccionesMenu dominio={v.dominio} estado={estado} tieneExternalId={Boolean(pub?.external_id)} />
-                              )}
+                              <CanalAccionesMenu dominio={v.dominio} canal={c} estado={estado} tieneExternalId={Boolean(pub?.external_id)} />
                             </div>
                             {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
                               <div
