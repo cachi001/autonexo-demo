@@ -39,6 +39,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     celular_operador,
     telefono_fijo_codigo_area,
     telefono_fijo_numero,
+    ciudad,
+    provincia_id,
+    provincia_nombre,
   } = body;
 
   if (
@@ -65,6 +68,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     celular_operador,
     telefono_fijo_codigo_area,
     telefono_fijo_numero,
+    ciudad,
+    provincia_id,
+    provincia_nombre,
   });
   if (!agencia) return NextResponse.json({ error: `No se encontró la agencia '${id}'` }, { status: 404 });
   return NextResponse.json(agencia);

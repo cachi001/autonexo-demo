@@ -30,7 +30,7 @@ export default function StockShell({ children, conError = 0 }: { children: React
         </div>
       )}
 
-      <div className="flex-1 pb-16 lg:pb-0 lg:pl-64">{children}</div>
+      <div className="min-w-0 flex-1 pb-16 lg:pb-0 lg:pl-64">{children}</div>
 
       <MobileTabBar onMore={() => setMenuAbierto(true)} conError={conError} />
     </div>

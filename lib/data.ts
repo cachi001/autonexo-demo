@@ -71,6 +71,14 @@ export type Agencia = {
   celular_operador: string;
   telefono_fijo_codigo_area: string;
   telefono_fijo_numero: string;
+  // Ubicación real de la agencia -ML exige location hasta nivel ciudad para
+  // publicar un vehículo ("Field 'location' requires up to city level",
+  // confirmado en vivo); antes se mandaba siempre Mendoza capital fija sin
+  // preguntarle nada a la agencia. provincia_id es el id que usa la propia
+  // API de ML (ej. "AR-M"), no un nombre libre -ver lib/provincias.ts.
+  ciudad: string;
+  provincia_id: string;
+  provincia_nombre: string;
   fecha_alta: string;
 };
 
@@ -289,6 +297,12 @@ function asegurarTablas(): Promise<void> {
       // que hubiera). Hash con bcrypt, nunca se guarda ni se devuelve la
       // contraseña en texto plano.
       await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS password_hash TEXT NOT NULL DEFAULT ''`;
+      // Ubicación real -antes no existía ningún campo de domicilio, Mercado
+      // Libre recibía siempre "Mendoza, Mendoza" fijo sin importar dónde
+      // estuviera la agencia de verdad.
+      await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS ciudad TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS provincia_id TEXT NOT NULL DEFAULT ''`;
+      await sql`ALTER TABLE agencias ADD COLUMN IF NOT EXISTS provincia_nombre TEXT NOT NULL DEFAULT ''`;
       await sql`
         CREATE TABLE IF NOT EXISTS sesiones (
           token TEXT PRIMARY KEY,
@@ -563,6 +577,9 @@ function filaAAgencia(r: Record<string, unknown>): Agencia {
     celular_operador: (r.celular_operador as string) || "",
     telefono_fijo_codigo_area: (r.telefono_fijo_codigo_area as string) || "",
     telefono_fijo_numero: (r.telefono_fijo_numero as string) || "",
+    ciudad: (r.ciudad as string) || "",
+    provincia_id: (r.provincia_id as string) || "",
+    provincia_nombre: (r.provincia_nombre as string) || "",
     fecha_alta: r.fecha_alta as string,
   };
 }
@@ -680,6 +697,9 @@ export async function actualizarAgencia(
     celular_operador: string;
     telefono_fijo_codigo_area: string;
     telefono_fijo_numero: string;
+    ciudad: string;
+    provincia_id: string;
+    provincia_nombre: string;
   }>
 ): Promise<Agencia | null> {
   await asegurarTablas();
@@ -697,6 +717,9 @@ export async function actualizarAgencia(
     celular_operador: datos.celular_operador?.trim() ?? actual.celular_operador,
     telefono_fijo_codigo_area: datos.telefono_fijo_codigo_area?.trim() ?? actual.telefono_fijo_codigo_area,
     telefono_fijo_numero: datos.telefono_fijo_numero?.trim() ?? actual.telefono_fijo_numero,
+    ciudad: datos.ciudad?.trim() ?? actual.ciudad,
+    provincia_id: datos.provincia_id?.trim() ?? actual.provincia_id,
+    provincia_nombre: datos.provincia_nombre?.trim() ?? actual.provincia_nombre,
   };
   const filas = await sql`
     UPDATE agencias SET
@@ -709,7 +732,10 @@ export async function actualizarAgencia(
       celular_numero = ${nueva.celular_numero},
       celular_operador = ${nueva.celular_operador},
       telefono_fijo_codigo_area = ${nueva.telefono_fijo_codigo_area},
-      telefono_fijo_numero = ${nueva.telefono_fijo_numero}
+      telefono_fijo_numero = ${nueva.telefono_fijo_numero},
+      ciudad = ${nueva.ciudad},
+      provincia_id = ${nueva.provincia_id},
+      provincia_nombre = ${nueva.provincia_nombre}
     WHERE id = ${id}
     RETURNING *
   `;

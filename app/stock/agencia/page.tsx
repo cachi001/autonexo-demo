@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { PROVINCIAS_AR } from "@/lib/provincias";
 
 const OPERADORES = ["Claro", "Movistar", "Personal"];
 
@@ -18,6 +19,9 @@ type Agencia = {
   celular_operador: string;
   telefono_fijo_codigo_area: string;
   telefono_fijo_numero: string;
+  ciudad: string;
+  provincia_id: string;
+  provincia_nombre: string;
   fecha_alta: string;
 };
 
@@ -53,7 +57,9 @@ export default function AgenciaPage() {
     !agencia.contacto_email.trim() ||
     !agencia.celular_codigo_area.trim() ||
     !agencia.celular_numero.trim() ||
-    !agencia.celular_operador;
+    !agencia.celular_operador ||
+    !agencia.ciudad.trim() ||
+    !agencia.provincia_id;
 
   async function guardar() {
     if (!agencia) return;
@@ -75,6 +81,9 @@ export default function AgenciaPage() {
           celular_operador: agencia.celular_operador,
           telefono_fijo_codigo_area: agencia.telefono_fijo_codigo_area,
           telefono_fijo_numero: agencia.telefono_fijo_numero,
+          ciudad: agencia.ciudad,
+          provincia_id: agencia.provincia_id,
+          provincia_nombre: agencia.provincia_nombre,
         }),
       });
       if (!res.ok) throw new Error();
@@ -213,6 +222,44 @@ export default function AgenciaPage() {
                     value={agencia.telefono_fijo_numero}
                     onChange={(e) => set("telefono_fijo_numero", e.target.value)}
                     placeholder="4123456"
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-zinc-100 pt-4">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">Ubicación *</div>
+              <p className="mb-3 text-xs text-zinc-400">
+                Mercado Libre exige la ubicación real de la agencia para publicar un aviso. Antes AutoNexo mandaba siempre
+                &quot;Mendoza, Mendoza&quot; fijo, no importaba dónde estuviera la agencia — ahora usa lo que completes acá.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Provincia</label>
+                  <select
+                    value={agencia.provincia_id}
+                    onChange={(e) => {
+                      const prov = PROVINCIAS_AR.find((p) => p.id === e.target.value);
+                      setAgencia((a) =>
+                        a ? { ...a, provincia_id: prov?.id || "", provincia_nombre: prov?.nombre || "" } : a
+                      );
+                      setGuardado(false);
+                    }}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+                  >
+                    <option value="">Elegí una</option>
+                    {PROVINCIAS_AR.map((p) => (
+                      <option key={p.id} value={p.id}>{p.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Ciudad</label>
+                  <input
+                    value={agencia.ciudad}
+                    onChange={(e) => set("ciudad", e.target.value)}
+                    placeholder="Ciudad de Mendoza"
                     className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
                   />
                 </div>

@@ -2,13 +2,19 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { Camera, CheckCircle2, ArrowLeft, Loader2 } from "lucide-react";
+import { Camera, CheckCircle2, ArrowLeft, Loader2, ExternalLink } from "lucide-react";
+import CanalLogo from "@/components/CanalLogo";
+import type { Canal } from "@/lib/data";
 
 type Vehiculo = {
   dominio: string; marca: string; modelo: string; anio: string; tipo: string;
   precio: string; km: string; color: string; descripcion: string;
   documentacion_validada: boolean; fotos: string[];
 };
+
+type CanalPublicado = { canal: Canal; permalink: string };
+
+const NOMBRE_CANAL: Record<Canal, string> = { mercadolibre: "Mercado Libre", facebook: "Facebook", instagram: "Instagram" };
 
 function formatoPrecio(p: string) {
   const n = parseFloat(p);
@@ -22,7 +28,10 @@ function accentFicha(v: Vehiculo) {
 export default function FichaVehiculoPage({ params }: { params: Promise<{ dominio: string }> }) {
   const { dominio } = use(params);
   const [vehiculo, setVehiculo] = useState<Vehiculo | null>(null);
+  const [canalesPublicados, setCanalesPublicados] = useState<CanalPublicado[]>([]);
   const [notFound, setNotFound] = useState(false);
+  const [errorCarga, setErrorCarga] = useState(false);
+  const [intento, setIntento] = useState(0);
   const [fotoActiva, setFotoActiva] = useState(0);
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -30,14 +39,28 @@ export default function FichaVehiculoPage({ params }: { params: Promise<{ domini
   const [confirmado, setConfirmado] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
+  // Antes, si /api/catalogo/stock fallaba (ej. conexión inestable a la
+  // base), la ficha se quedaba en blanco para siempre, sin ningún mensaje ni
+  // forma de reintentar -el comprador no tenía ninguna pista de qué pasó.
   useEffect(() => {
-    fetch("/api/catalogo/stock").then((r) => r.json()).then((d) => {
-      const v = (d.vehiculos || []).find((x: Vehiculo) => x.dominio === dominio);
-      if (!v) { setNotFound(true); return; }
-      setVehiculo(v);
-      fetch(`/api/catalogo/${encodeURIComponent(dominio)}/vista`, { method: "POST" }).catch(() => {});
-    });
-  }, [dominio]);
+    setErrorCarga(false);
+    fetch("/api/catalogo/stock")
+      .then((r) => {
+        if (!r.ok) throw new Error("No se pudo cargar el catálogo.");
+        return r.json();
+      })
+      .then((d) => {
+        const v = (d.vehiculos || []).find((x: Vehiculo) => x.dominio === dominio);
+        if (!v) { setNotFound(true); return; }
+        setVehiculo(v);
+        fetch(`/api/catalogo/${encodeURIComponent(dominio)}/vista`, { method: "POST" }).catch(() => {});
+      })
+      .catch(() => setErrorCarga(true));
+    fetch(`/api/catalogo/${encodeURIComponent(dominio)}/publicaciones`)
+      .then((r) => r.json())
+      .then((d) => setCanalesPublicados(d.canales || []))
+      .catch(() => {});
+  }, [dominio, intento]);
 
   async function enviarConsulta() {
     if (!nombre || !mensaje) { alert("Completá tu nombre y la consulta."); return; }
@@ -56,6 +79,19 @@ export default function FichaVehiculoPage({ params }: { params: Promise<{ domini
     return (
       <div className="min-h-screen bg-zinc-50 p-6">
         <p className="text-sm text-zinc-500">No se encontró el vehículo. <Link href="/catalogo" className="text-blue-600 underline">Volver al catálogo</Link></p>
+      </div>
+    );
+  }
+  if (errorCarga) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-zinc-50 p-6 text-center">
+        <p className="text-sm text-zinc-500">No pudimos cargar este vehículo. Puede ser un problema momentáneo de conexión.</p>
+        <button
+          onClick={() => setIntento((i) => i + 1)}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+        >
+          Reintentar
+        </button>
       </div>
     );
   }
@@ -113,6 +149,27 @@ export default function FichaVehiculoPage({ params }: { params: Promise<{ domini
               <span>Color: {vehiculo.color || "—"}</span><span>Tipo: {vehiculo.tipo || "—"}</span>
             </div>
             {vehiculo.descripcion && <p className="mb-4 text-sm text-zinc-600">{vehiculo.descripcion}</p>}
+
+            {canalesPublicados.length > 0 && (
+              <div className="mb-4">
+                <div className="mb-1.5 text-xs font-semibold text-zinc-500">También publicado en</div>
+                <div className="flex flex-wrap gap-2">
+                  {canalesPublicados.map((c) => (
+                    <a
+                      key={c.canal}
+                      href={c.permalink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-100"
+                    >
+                      <CanalLogo canal={c.canal} size={16} />
+                      {NOMBRE_CANAL[c.canal]}
+                      <ExternalLink className="h-3 w-3 text-zinc-400" strokeWidth={2} />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {confirmado ? (
               <div className="flex gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-relaxed text-emerald-700">

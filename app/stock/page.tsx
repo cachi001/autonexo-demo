@@ -47,7 +47,7 @@ export default function StockPage() {
             className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 transition hover:border-red-300"
           >
             <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" strokeWidth={2} />
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold text-red-800">
                 {erroresPublicacion.length === 1
                   ? "1 publicación necesita tu atención"

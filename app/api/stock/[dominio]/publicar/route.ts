@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buscarVehiculo, obtenerCanalConectado, guardarCanalConectado, listarPublicaciones, setPublicacion, Canal } from "@/lib/data";
+import { buscarVehiculo, obtenerCanalConectado, guardarCanalConectado, listarPublicaciones, setPublicacion, obtenerAgencia, Canal } from "@/lib/data";
 import { publicarItem, actualizarItem, refrescarToken } from "@/lib/mercadolibre";
 import { publicarEnFacebook, publicarEnInstagram } from "@/lib/meta";
 import { agenciaDesdeRequest } from "@/lib/auth";
@@ -26,12 +26,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
     descripcion: descripcionPersonalizada,
     mensaje: mensajePersonalizado,
     fotoIndice,
+    listingTypeId,
+    condicion,
+    garantiaFabrica,
+    garantiaMecanica,
+    entregaDomicilio,
   } = (await req.json()) as {
     canal: Canal;
     titulo?: string;
     descripcion?: string;
     mensaje?: string;
     fotoIndice?: number;
+    listingTypeId?: string;
+    condicion?: "used" | "new";
+    garantiaFabrica?: boolean;
+    garantiaMecanica?: boolean;
+    entregaDomicilio?: boolean;
   };
 
   const vehiculo = await buscarVehiculo(decodeURIComponent(dominio), agencia.id);
@@ -44,6 +54,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
     }
     if (vehiculo.fotos.length === 0) {
       return NextResponse.json({ error: "El vehículo no tiene fotos cargadas, hace falta al menos una para publicar." }, { status: 400 });
+    }
+    const agenciaCompleta = await obtenerAgencia(agencia.id);
+    if (!agenciaCompleta?.ciudad.trim() || !agenciaCompleta?.provincia_id.trim()) {
+      return NextResponse.json(
+        { error: "Falta la ubicación de la agencia (ciudad y provincia), obligatoria para publicar en Mercado Libre. Completala en Datos de la agencia." },
+        { status: 400 }
+      );
     }
 
     // El access_token de ML dura pocas horas (confirmado en vivo: "invalid
@@ -96,6 +113,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
       puertas: vehiculo.puertas,
       dominio: vehiculo.dominio,
       chasis: vehiculo.chasis,
+      listingTypeId: listingTypeId || "free",
+      condicion: condicion === "new" ? "new" as const : "used" as const,
+      ciudad: agenciaCompleta.ciudad,
+      provinciaId: agenciaCompleta.provincia_id,
+      provinciaNombre: agenciaCompleta.provincia_nombre,
+      garantiaFabrica: Boolean(garantiaFabrica),
+      garantiaMecanica: Boolean(garantiaMecanica),
+      entregaDomicilio: Boolean(entregaDomicilio),
     };
     // Si ya existe un aviso real de este vehículo en ML (quedó "en revisión"
     // o con un error pero SÍ tiene external_id), se actualiza ESE mismo

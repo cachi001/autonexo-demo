@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Camera, Loader2, X, ThumbsUp, MessageCircle, Send, Heart, Bookmark } from "lucide-react";
+import { Camera, Loader2, X, ThumbsUp, MessageCircle, Send, Heart, Bookmark, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import CanalLogo from "@/components/CanalLogo";
 import type { Canal } from "@/lib/data";
 
@@ -18,9 +19,22 @@ type Props = {
   canal: Canal;
   vehiculo: VehiculoResumen;
   cargando: boolean;
-  onConfirmar: (payload: { titulo?: string; descripcion?: string; mensaje?: string; fotoIndice?: number }) => void;
+  onConfirmar: (payload: {
+    titulo?: string;
+    descripcion?: string;
+    mensaje?: string;
+    fotoIndice?: number;
+    listingTypeId?: string;
+    condicion?: "used" | "new";
+    garantiaFabrica?: boolean;
+    garantiaMecanica?: boolean;
+    entregaDomicilio?: boolean;
+  }) => void;
   onCancelar: () => void;
 };
+
+type ListingType = { id: string; nombre: string; disponibles: number | null };
+type OpcionesMl = { listingTypes: ListingType[]; ciudad: string; provinciaNombre: string; ubicacionCompleta: boolean };
 
 const NOMBRE_CANAL: Record<Canal, string> = { mercadolibre: "Mercado Libre", facebook: "Facebook", instagram: "Instagram" };
 
@@ -67,12 +81,53 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
   );
   const [fotoIndice, setFotoIndice] = useState(0);
 
+  // Nada de esto va hardcodeado -la agencia lo elige acá antes de publicar,
+  // y la vista previa de la derecha se actualiza en vivo con lo que elija.
+  const [opcionesMl, setOpcionesMl] = useState<OpcionesMl | null>(null);
+  const [errorOpciones, setErrorOpciones] = useState("");
+  const [cargandoOpciones, setCargandoOpciones] = useState(esMl);
+  const [listingTypeId, setListingTypeId] = useState("free");
+  const [condicion, setCondicion] = useState<"used" | "new">("used");
+  const [garantiaFabrica, setGarantiaFabrica] = useState(false);
+  const [garantiaMecanica, setGarantiaMecanica] = useState(false);
+  const [entregaDomicilio, setEntregaDomicilio] = useState(false);
+
+  useEffect(() => {
+    if (!esMl) return;
+    let cancelado = false;
+    setCargandoOpciones(true);
+    fetch("/api/canales/mercadolibre/opciones")
+      .then(async (r) => {
+        const data = await r.json();
+        if (cancelado) return;
+        if (!r.ok) {
+          setErrorOpciones(data.error || "No se pudieron cargar las opciones de Mercado Libre.");
+          return;
+        }
+        setOpcionesMl(data);
+        if (data.listingTypes?.[0]) setListingTypeId(data.listingTypes[0].id);
+      })
+      .catch(() => {
+        if (!cancelado) setErrorOpciones("No se pudo conectar con Mercado Libre para traer las opciones de publicación.");
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoOpciones(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [esMl]);
+
   const fotoPreview = vehiculo.fotos[esMl ? 0 : fotoIndice];
   const sinFotos = vehiculo.fotos.length === 0;
-  const deshabilitado = cargando || sinFotos || (esMl ? !titulo.trim() : !mensaje.trim());
+  const ubicacionFalta = esMl && opcionesMl !== null && !opcionesMl.ubicacionCompleta;
+  const deshabilitado =
+    cargando ||
+    sinFotos ||
+    (esMl ? !titulo.trim() || cargandoOpciones || !opcionesMl || ubicacionFalta || Boolean(errorOpciones) : !mensaje.trim());
 
   function confirmar() {
-    if (esMl) onConfirmar({ titulo, descripcion });
+    if (esMl) onConfirmar({ titulo, descripcion, listingTypeId, condicion, garantiaFabrica, garantiaMecanica, entregaDomicilio });
     else onConfirmar({ mensaje, fotoIndice });
   }
 
@@ -129,10 +184,88 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
                   <textarea
                     value={descripcion}
                     onChange={(e) => setDescripcion(e.target.value)}
-                    rows={10}
+                    rows={6}
                     className={`w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm leading-relaxed outline-none ring-4 ring-transparent transition ${acento.anillo}`}
                   />
                 </div>
+
+                {cargandoOpciones && (
+                  <div className="flex items-center gap-2 text-sm text-zinc-400">
+                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} /> Cargando opciones reales de tu cuenta de Mercado Libre...
+                  </div>
+                )}
+
+                {!cargandoOpciones && errorOpciones && (
+                  <div className="rounded-lg bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700">{errorOpciones}</div>
+                )}
+
+                {!cargandoOpciones && opcionesMl && ubicacionFalta && (
+                  <div className="flex items-start gap-2.5 rounded-lg bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+                    <span>
+                      Falta la ubicación de tu agencia, obligatoria para publicar.{" "}
+                      <Link href="/stock/agencia" className="font-semibold underline">
+                        Completala en Datos de la agencia
+                      </Link>
+                      .
+                    </span>
+                  </div>
+                )}
+
+                {!cargandoOpciones && opcionesMl && !ubicacionFalta && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="mb-1.5 block text-sm font-semibold text-zinc-600">Tipo de publicación</label>
+                        <select
+                          value={listingTypeId}
+                          onChange={(e) => setListingTypeId(e.target.value)}
+                          className={`w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm outline-none ring-4 ring-transparent transition ${acento.anillo}`}
+                        >
+                          {opcionesMl.listingTypes.map((lt) => (
+                            <option key={lt.id} value={lt.id}>
+                              {lt.nombre}
+                              {lt.disponibles !== null ? ` (${lt.disponibles} disponibles)` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-semibold text-zinc-600">Condición</label>
+                        <select
+                          value={condicion}
+                          onChange={(e) => setCondicion(e.target.value as "used" | "new")}
+                          className={`w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm outline-none ring-4 ring-transparent transition ${acento.anillo}`}
+                        >
+                          <option value="used">Usado</option>
+                          <option value="new">Nuevo</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-sm font-semibold text-zinc-600">Ubicación</label>
+                      <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-sm text-zinc-600">
+                        {opcionesMl.ciudad}, {opcionesMl.provinciaNombre}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <label className="flex items-center gap-2.5 text-sm text-zinc-700">
+                        <input type="checkbox" checked={garantiaFabrica} onChange={(e) => setGarantiaFabrica(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
+                        Con garantía de fábrica
+                      </label>
+                      <label className="flex items-center gap-2.5 text-sm text-zinc-700">
+                        <input type="checkbox" checked={garantiaMecanica} onChange={(e) => setGarantiaMecanica(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
+                        Con garantía mecánica
+                      </label>
+                      <label className="flex items-center gap-2.5 text-sm text-zinc-700">
+                        <input type="checkbox" checked={entregaDomicilio} onChange={(e) => setEntregaDomicilio(e.target.checked)} className="h-4 w-4 rounded border-zinc-300" />
+                        Entrega a domicilio
+                      </label>
+                    </div>
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -185,9 +318,24 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
                   )}
                 </div>
                 <div className="p-5">
+                  {opcionesMl && !ubicacionFalta && (
+                    <div className="mb-2.5 flex flex-wrap gap-1.5">
+                      <span className={`rounded px-2 py-0.5 text-xs font-semibold ${acento.chip}`}>
+                        {opcionesMl.listingTypes.find((lt) => lt.id === listingTypeId)?.nombre || listingTypeId}
+                      </span>
+                      <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">
+                        {condicion === "new" ? "Nuevo" : "Usado"}
+                      </span>
+                      {garantiaFabrica && <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">Garantía de fábrica</span>}
+                      {garantiaMecanica && <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">Garantía mecánica</span>}
+                      {entregaDomicilio && <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">Entrega a domicilio</span>}
+                    </div>
+                  )}
                   <div className="text-base font-medium leading-snug text-zinc-800">{titulo || "(sin título)"}</div>
                   <div className="mt-2 text-2xl font-bold text-zinc-900">{formatoPrecio(vehiculo.precio)}</div>
-                  <div className="mt-1 text-sm text-zinc-400">Mendoza, Mendoza</div>
+                  <div className="mt-1 text-sm text-zinc-400">
+                    {opcionesMl && !ubicacionFalta ? `${opcionesMl.ciudad}, ${opcionesMl.provinciaNombre}` : "Ubicación sin completar"}
+                  </div>
                   {descripcion && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600">{descripcion}</p>}
                 </div>
               </div>

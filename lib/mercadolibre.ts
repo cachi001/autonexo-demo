@@ -104,6 +104,54 @@ export async function predecirCategoria(titulo: string): Promise<string | null> 
   return data?.[0]?.category_id || null;
 }
 
+// Confirmado en vivo (GET /categories/MLA1744/attributes, público): estos son
+// los únicos atributos reales de garantía/entrega que acepta la categoría de
+// autos, no hay un campo "shipping" genérico para vehículos (se venden como
+// clasificado, ML no gestiona el envío físico de un auto). CAR_DELIVERY
+// ("Entrega a domicilio") es el equivalente real a "envío" para esta
+// categoría -confirmado que existe, no inventado.
+export type ListingType = { id: string; nombre: string; disponibles: number | null };
+
+// Antes se publicaba siempre con listing_type_id: "free" sin preguntarle
+// nada a la agencia. Para una cuenta particular existe de verdad un tier
+// gratis; para una cuenta car_dealer NO (confirmado en vivo contra
+// mercadolibre.com.ar/ayuda/Costos-para-concesionarias_903, ver AutoNexo/
+// CLAUDE.md) -hace falta consultar el cupo real contratado antes de dejar
+// elegir, si no la agencia podría intentar publicar con un tipo que no tiene
+// pago y romperse en silencio.
+// Nombres reales que usa Mercado Libre en su propio flujo de publicar
+// (confirmado en vivo el 2026-10-20, no son nombres inventados) -el tier
+// gratis se llama "Básico" en la UI de ML, no "Gratuita".
+const NOMBRES_LISTING_TYPE: Record<string, string> = {
+  free: "Básico",
+  silver: "Plata",
+  gold_special: "Oro",
+  gold_pro: "Oro Premium",
+};
+
+export async function obtenerPaquetesPublicacion(accessToken: string, userId: number): Promise<ListingType[]> {
+  const res = await fetch(
+    `${API_URL}/users/${userId}/classifieds_promotion_packs?package_content=ALL`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) {
+    // Cuentas particulares nuevas pueden no tener ningún paquete contratado
+    // todavía y este endpoint devuelve error -la gratuita sigue existiendo
+    // para ese caso, se ofrece como único disponible.
+    return [{ id: "free", nombre: NOMBRES_LISTING_TYPE.free, disponibles: null }];
+  }
+  const data = (await res.json()) as {
+    packs?: { listing_type_id: string; remaining_listings?: number }[];
+  };
+  const packs = data?.packs || [];
+  if (packs.length === 0) return [{ id: "free", nombre: NOMBRES_LISTING_TYPE.free, disponibles: null }];
+  return packs.map((p) => ({
+    id: p.listing_type_id,
+    nombre: NOMBRES_LISTING_TYPE[p.listing_type_id] || p.listing_type_id,
+    disponibles: typeof p.remaining_listings === "number" ? p.remaining_listings : null,
+  }));
+}
+
 export type PublicarItemInput = {
   accessToken: string;
   titulo: string;
@@ -114,6 +162,16 @@ export type PublicarItemInput = {
   km: string;
   descripcion: string;
   fotosUrls: string[];
+  // Nada de esto estaba hardcodeado por decisión del usuario -lo completa la
+  // agencia antes de publicar, ver PublicarCanalModal.tsx.
+  listingTypeId: string;
+  condicion: "used" | "new";
+  ciudad: string;
+  provinciaId: string;
+  provinciaNombre: string;
+  garantiaFabrica: boolean;
+  garantiaMecanica: boolean;
+  entregaDomicilio: boolean;
   // Ficha técnica -alineada con AutoClick (version/combustible ya existen
   // ahí, puertas es nuevo en los dos). ML las exige como atributos
   // obligatorios de la categoría "Autos y Camionetas" (TRIM/FUEL_TYPE/DOORS,
@@ -171,6 +229,12 @@ export async function publicarItem(input: PublicarItemInput) {
       error: "Falta el chasis (o tiene menos de 6 caracteres), obligatorio para publicar en Mercado Libre desde oct-2024. Completalo en la ficha del vehículo.",
     };
   }
+  if (!input.ciudad.trim() || !input.provinciaId.trim()) {
+    return {
+      ok: false as const,
+      error: "Falta la ubicación de la agencia (ciudad y provincia), obligatoria para publicar en Mercado Libre. Completala en Datos de la agencia.",
+    };
+  }
 
   const categoryId = await predecirCategoria(input.titulo);
   if (!categoryId) {
@@ -190,28 +254,22 @@ export async function publicarItem(input: PublicarItemInput) {
     price: input.precio,
     currency_id: "ARS",
     buying_mode: "classified",
-    // "free" (Gratuita) en vez de "silver" (Plata, $69.000) -confirmado en
-    // vivo contra /sites/MLA/listing_prices que existe una opción sin costo
-    // para la categoría de vehículos (menor exposición en los resultados,
-    // pero publicación real y gratis). No se le había preguntado a la
-    // agencia qué tipo de aviso quería pagar -usar la gratis por default es
-    // lo correcto hasta que haya una decisión explícita de pagar más
-    // exposición.
-    listing_type_id: "free",
-    condition: "used",
+    // Elegido por la agencia en el modal de publicación -ya no hardcodeado a
+    // "free". Ver obtenerPaquetesPublicacion arriba: las opciones que ve la
+    // agencia son las que realmente tiene disponibles en su cuenta de ML.
+    listing_type_id: input.listingTypeId,
+    condition: input.condicion,
     available_quantity: 1,
     description: { plain_text: input.descripcion || input.titulo },
     pictures,
-    // ML exige ubicación hasta nivel ciudad (confirmado en vivo: "Field
-    // 'location' requires up to city level") -AutoNexo hoy no pide domicilio
-    // físico de la agencia (solo CUIT/contacto), así que por ahora se manda
-    // un default fijo de Mendoza capital -el mercado al que apunta AutoNexo-
-    // en vez de dejar la publicación rota. Si se suma domicilio real de la
-    // agencia (ver AutoNexo/CLAUDE.md pendientes), esto debería leer de ahí.
+    // Ubicación real de la agencia (ver Datos de la agencia) -antes mandaba
+    // siempre "Mendoza, Mendoza" fijo sin importar dónde estuviera la
+    // agencia de verdad. provinciaId es el id que exige la propia API de ML
+    // (ej. "AR-M"), confirmado contra GET /countries/AR.
     location: {
       country: { id: "AR" },
-      state: { id: "AR-M", name: "Mendoza" },
-      city: { name: "Mendoza" },
+      state: { id: input.provinciaId, name: input.provinciaNombre },
+      city: { name: input.ciudad },
     },
     attributes: [
       { id: "BRAND", value_name: input.marca },
@@ -229,6 +287,12 @@ export async function publicarItem(input: PublicarItemInput) {
       // guión/espacios, como se guarda el dominio en el stock.
       { id: "LICENSE_PLATE", value_name: input.dominio.toUpperCase().replace(/[\s-]/g, "") },
       { id: "VIN_LAST_DIGITS", value_name: input.chasis.trim().slice(-6).toUpperCase() },
+      // Garantía y entrega a domicilio -opcionales, elegidos por la agencia.
+      // Confirmado en vivo (GET /categories/MLA1744/attributes) que estos
+      // tres existen de verdad para la categoría de autos.
+      { id: "WITH_FACTORY_WARRANTY", value_name: input.garantiaFabrica ? "Sí" : "No" },
+      { id: "WITH_MECHANICAL_WARRANTY", value_name: input.garantiaMecanica ? "Sí" : "No" },
+      { id: "CAR_DELIVERY", value_name: input.entregaDomicilio ? "Sí" : "No" },
     ],
   };
 
