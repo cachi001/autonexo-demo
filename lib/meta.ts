@@ -95,12 +95,18 @@ export async function conectarPrimeraPagina(code: string, redirectUri: string): 
     throw new Error("Tu cuenta de Meta no tiene ninguna Página de Facebook asociada. Creá una Página antes de conectar.");
   }
   const pagina = paginas[0];
+  // Meta a veces no devuelve expires_in en el intercambio a token de larga
+  // duración (confirmado en vivo: provocaba "RangeError: Invalid time value"
+  // al armar la fecha). Cuando falta, se asume la duración estándar de un
+  // token de usuario de larga duración de Meta (60 días), documentada en
+  // developers.facebook.com.
+  const segundosValidez = expires_in && expires_in > 0 ? expires_in : 60 * 24 * 60 * 60;
   return {
     pageId: pagina.id,
     pageNombre: pagina.name,
     pageAccessToken: pagina.access_token,
     igUserId: pagina.instagram_business_account?.id || null,
-    expiresAt: new Date(Date.now() + expires_in * 1000).toISOString(),
+    expiresAt: new Date(Date.now() + segundosValidez * 1000).toISOString(),
   };
 }
 
