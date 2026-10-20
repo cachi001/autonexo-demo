@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, AlertTriangle } from "lucide-react";
 import CanalLogo from "@/components/CanalLogo";
+import { useToast } from "@/components/Toast";
 
 type CanalConectado = {
   canal: "mercadolibre" | "instagram" | "facebook";
@@ -30,9 +30,12 @@ export default function CanalesPage() {
 
 function CanalesPageInterna() {
   const params = useSearchParams();
+  const router = useRouter();
+  const { mostrar } = useToast();
   const [agencia, setAgencia] = useState<Agencia | null>(null);
   const [conectados, setConectados] = useState<CanalConectado[]>([]);
   const [cargando, setCargando] = useState(true);
+  const yaMostrado = useRef(false);
 
   async function cargar() {
     const resMe = await fetch("/api/auth/me");
@@ -58,8 +61,22 @@ function CanalesPageInterna() {
     cargar();
   }
 
-  const error = params.get("error");
-  const conectadoAhora = params.get("conectado");
+  // Antes el resultado de la conexión (éxito o error) se leía directo de la
+  // URL y quedaba mostrado como un banner fijo para siempre, incluso
+  // refrescando la página o volviendo más tarde, porque el query param
+  // nunca se borraba. Ahora se muestra una sola vez como toast y se limpia
+  // la URL enseguida (router.replace sin query), para que no quede un error
+  // viejo pegado en pantalla indefinidamente.
+  useEffect(() => {
+    if (yaMostrado.current) return;
+    const error = params.get("error");
+    const conectadoAhora = params.get("conectado");
+    if (!error && !conectadoAhora) return;
+    yaMostrado.current = true;
+    if (error) mostrar("error", error);
+    if (conectadoAhora) mostrar("exito", `${conectadoAhora} conectado correctamente.`);
+    router.replace("/stock/canales");
+  }, [params, mostrar, router]);
 
   return (
     <>
@@ -77,17 +94,6 @@ function CanalesPageInterna() {
           (siempre con aprobación explícita — nada se publica solo). Para ver qué está publicado y hacerle
           seguimiento, andá a <Link href="/stock/canales-externos" className="underline">Canales externos</Link>.
         </p>
-
-        {conectadoAhora && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
-            <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={2} /> {conectadoAhora} conectado correctamente.
-          </div>
-        )}
-        {error && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} /> {error}
-          </div>
-        )}
 
         {cargando && <p className="text-sm text-zinc-400">Cargando...</p>}
 
