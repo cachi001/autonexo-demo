@@ -1,13 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { Camera, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Camera, Loader2, X, ThumbsUp, MessageCircle, Send, Heart, Bookmark } from "lucide-react";
+import CanalLogo from "@/components/CanalLogo";
 import type { Canal } from "@/lib/data";
 
-// Antes, en Canales externos, tocar "Publicar" o "Reintentar" publicaba
-// directo en la Página/cuenta real de la agencia, sin que nadie viera qué
-// texto o qué foto se iba a usar. Este modal es la misma revisión que ya
-// existía en la ficha del vehículo, ahora reusable desde cualquier lugar.
+// Antes era un panel genérico sin identidad: mismo gris para los tres
+// canales, sin ningún indicio visual de qué red social es, y la "vista
+// previa" era solo texto + foto sueltos, nada que se pareciera a lo que la
+// agencia iba a ver de verdad en Mercado Libre, Facebook o Instagram. Ahora
+// cada canal tiene su acento de color real, y la vista previa imita la
+// estructura real de un post (encabezado de página + foto + caption + barra
+// de reacciones) o de un aviso de ML (foto + título + precio + ubicación).
 type VehiculoResumen = { marca: string; modelo: string; anio: string; precio: string; descripcion: string; fotos: string[] };
 
 type Props = {
@@ -20,6 +24,28 @@ type Props = {
 
 const NOMBRE_CANAL: Record<Canal, string> = { mercadolibre: "Mercado Libre", facebook: "Facebook", instagram: "Instagram" };
 
+// Acento real de marca por canal -no el mismo gris genérico para los tres.
+const ACENTO: Record<Canal, { anillo: string; boton: string; texto: string; chip: string }> = {
+  mercadolibre: {
+    anillo: "focus:border-amber-500 focus:ring-amber-500/20",
+    boton: "bg-amber-400 text-zinc-900 hover:bg-amber-300",
+    texto: "text-amber-700",
+    chip: "bg-amber-50 text-amber-700",
+  },
+  facebook: {
+    anillo: "focus:border-blue-500 focus:ring-blue-500/20",
+    boton: "bg-blue-600 text-white hover:bg-blue-700",
+    texto: "text-blue-700",
+    chip: "bg-blue-50 text-blue-700",
+  },
+  instagram: {
+    anillo: "focus:border-pink-500 focus:ring-pink-500/20",
+    boton: "bg-gradient-to-r from-amber-500 via-pink-600 to-purple-600 text-white hover:opacity-90",
+    texto: "text-pink-700",
+    chip: "bg-pink-50 text-pink-700",
+  },
+};
+
 function formatoPrecio(p: string) {
   const n = parseFloat(p);
   return isNaN(n) ? p : "$" + n.toLocaleString("es-AR");
@@ -27,6 +53,13 @@ function formatoPrecio(p: string) {
 
 export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfirmar, onCancelar }: Props) {
   const esMl = canal === "mercadolibre";
+  const acento = ACENTO[canal];
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   const [titulo, setTitulo] = useState(() => `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio}`.slice(0, 60));
   const [descripcion, setDescripcion] = useState(vehiculo.descripcion || "");
   const [mensaje, setMensaje] = useState(
@@ -43,54 +76,88 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
     else onConfirmar({ mensaje, fotoIndice });
   }
 
+  function cerrar() {
+    setVisible(false);
+    setTimeout(onCancelar, 120);
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancelar}>
-      <div className="w-full max-w-2xl rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h3 className="mb-3 text-sm font-semibold text-zinc-900">Editar antes de publicar en {NOMBRE_CANAL[canal]}</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-3">
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/50 p-4 backdrop-blur-sm transition-opacity duration-150 ${
+        visible ? "opacity-100" : "opacity-0"
+      }`}
+      onClick={cerrar}
+    >
+      <div
+        className={`flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl transition-all duration-150 ${
+          visible ? "translate-y-0 scale-100 opacity-100" : "translate-y-2 scale-95 opacity-0"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-zinc-100 px-6 py-5">
+          <CanalLogo canal={canal} size={40} />
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-zinc-900">Publicar en {NOMBRE_CANAL[canal]}</h3>
+            <p className="text-sm text-zinc-400">Revisá cómo va a quedar antes de confirmar</p>
+          </div>
+          <button
+            onClick={cerrar}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+            aria-label="Cerrar"
+          >
+            <X className="h-5 w-5" strokeWidth={2} />
+          </button>
+        </div>
+
+        <div className="grid gap-8 overflow-y-auto p-6 sm:grid-cols-2">
+          <div className="space-y-5">
             {esMl ? (
               <>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Título (máx. 60 caracteres)</label>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label className="text-sm font-semibold text-zinc-600">Título</label>
+                    <span className="text-xs text-zinc-400">{titulo.length}/60</span>
+                  </div>
                   <input
                     value={titulo}
                     onChange={(e) => setTitulo(e.target.value.slice(0, 60))}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    className={`w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm outline-none ring-4 ring-transparent transition ${acento.anillo}`}
                   />
-                  <div className="mt-0.5 text-right text-[11px] text-zinc-400">{titulo.length}/60</div>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Descripción</label>
+                  <label className="mb-1.5 block text-sm font-semibold text-zinc-600">Descripción</label>
                   <textarea
                     value={descripcion}
                     onChange={(e) => setDescripcion(e.target.value)}
-                    rows={5}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    rows={10}
+                    className={`w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm leading-relaxed outline-none ring-4 ring-transparent transition ${acento.anillo}`}
                   />
                 </div>
               </>
             ) : (
               <>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-zinc-600">Texto de la publicación</label>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label className="text-sm font-semibold text-zinc-600">Texto de la publicación</label>
+                    <span className="text-xs text-zinc-400">{mensaje.length} caracteres</span>
+                  </div>
                   <textarea
                     value={mensaje}
                     onChange={(e) => setMensaje(e.target.value)}
-                    rows={6}
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    rows={11}
+                    className={`w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm leading-relaxed outline-none ring-4 ring-transparent transition ${acento.anillo}`}
                   />
                 </div>
                 {vehiculo.fotos.length > 1 && (
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-zinc-600">Elegir foto</label>
-                    <div className="flex flex-wrap gap-2">
+                    <label className="mb-1.5 block text-sm font-semibold text-zinc-600">Elegir foto</label>
+                    <div className="flex flex-wrap gap-2.5">
                       {vehiculo.fotos.map((foto, i) => (
                         <button
                           key={i}
                           onClick={() => setFotoIndice(i)}
-                          className={`h-14 w-20 overflow-hidden rounded-md border-2 ${
-                            fotoIndice === i ? "border-blue-500" : "border-transparent"
+                          className={`h-20 w-28 overflow-hidden rounded-lg ring-2 transition ${
+                            fotoIndice === i ? "ring-zinc-900" : "ring-transparent hover:ring-zinc-300"
                           }`}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -105,46 +172,81 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-zinc-600">Vista previa</label>
-            <div className="overflow-hidden rounded-lg border border-zinc-300">
-              <div className="flex h-36 items-center justify-center bg-zinc-100">
-                {fotoPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={fotoPreview} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <Camera className="h-8 w-8 text-zinc-300" strokeWidth={1.5} />
-                )}
+            <label className="mb-1.5 block text-sm font-semibold text-zinc-600">Vista previa</label>
+
+            {esMl ? (
+              <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-sm">
+                <div className="flex h-56 items-center justify-center bg-zinc-100">
+                  {fotoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={fotoPreview} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <Camera className="h-10 w-10 text-zinc-300" strokeWidth={1.5} />
+                  )}
+                </div>
+                <div className="p-5">
+                  <div className="text-base font-medium leading-snug text-zinc-800">{titulo || "(sin título)"}</div>
+                  <div className="mt-2 text-2xl font-bold text-zinc-900">{formatoPrecio(vehiculo.precio)}</div>
+                  <div className="mt-1 text-sm text-zinc-400">Mendoza, Mendoza</div>
+                  {descripcion && <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600">{descripcion}</p>}
+                </div>
               </div>
-              <div className="p-3">
-                {esMl ? (
-                  <>
-                    <div className="text-sm font-medium text-zinc-800">{titulo || "(sin título)"}</div>
-                    <div className="mt-1 text-lg font-bold text-zinc-900">{formatoPrecio(vehiculo.precio)}</div>
-                    <div className="mt-0.5 text-xs text-zinc-400">Mendoza, Mendoza</div>
-                    {descripcion && <p className="mt-2 whitespace-pre-wrap text-xs text-zinc-600">{descripcion}</p>}
-                  </>
-                ) : (
-                  <p className="whitespace-pre-wrap text-xs text-zinc-700">{mensaje || "(sin texto)"}</p>
-                )}
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-sm">
+                <div className="flex items-center gap-2.5 px-4 pt-4">
+                  <CanalLogo canal={canal} size={36} />
+                  <div className="leading-tight">
+                    <div className="text-sm font-semibold text-zinc-800">Tu agencia</div>
+                    <div className="text-xs text-zinc-400">Ahora · 🌐</div>
+                  </div>
+                </div>
+                <p className="whitespace-pre-wrap px-4 pb-3.5 pt-2.5 text-sm leading-relaxed text-zinc-700">{mensaje || "(sin texto)"}</p>
+                <div className="flex h-64 items-center justify-center bg-zinc-100">
+                  {fotoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={fotoPreview} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <Camera className="h-10 w-10 text-zinc-300" strokeWidth={1.5} />
+                  )}
+                </div>
+                <div className="flex items-center gap-5 border-t border-zinc-100 px-4 py-3 text-zinc-400">
+                  {canal === "facebook" ? (
+                    <>
+                      <ThumbsUp className="h-5 w-5" strokeWidth={1.75} />
+                      <MessageCircle className="h-5 w-5" strokeWidth={1.75} />
+                      <Send className="h-5 w-5" strokeWidth={1.75} />
+                    </>
+                  ) : (
+                    <>
+                      <Heart className="h-5 w-5" strokeWidth={1.75} />
+                      <MessageCircle className="h-5 w-5" strokeWidth={1.75} />
+                      <Send className="h-5 w-5" strokeWidth={1.75} />
+                      <Bookmark className="ml-auto h-5 w-5" strokeWidth={1.75} />
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+
             {sinFotos && (
-              <p className="mt-1 text-[11px] text-amber-600">Este vehículo no tiene fotos, hace falta al menos una para publicar.</p>
+              <div className={`mt-2.5 rounded-lg px-3.5 py-2.5 text-sm font-medium ${acento.chip}`}>
+                Este vehículo no tiene fotos, hace falta al menos una para publicar.
+              </div>
             )}
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-2">
+        <div className="flex items-center justify-end gap-3 border-t border-zinc-100 bg-zinc-50 px-6 py-4">
+          <button onClick={cerrar} className="text-sm font-semibold text-zinc-500 hover:text-zinc-700">
+            Cancelar
+          </button>
           <button
             onClick={confirmar}
             disabled={deshabilitado}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${acento.boton}`}
           >
-            {cargando && <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />}
+            {cargando && <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />}
             {cargando ? "Publicando..." : "Confirmar y publicar"}
-          </button>
-          <button onClick={onCancelar} className="text-xs font-medium text-zinc-500 hover:text-zinc-700">
-            Cancelar
           </button>
         </div>
       </div>
