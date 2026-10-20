@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { MoreVertical, Loader2 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
+import PublicarCanalModal from "@/components/PublicarCanalModal";
 import type { Canal } from "@/lib/data";
 
 // Antes había un botón de texto por acción posible, pegado uno al lado del
@@ -26,7 +27,8 @@ import type { Canal } from "@/lib/data";
 // notificación flotante (toast). Pausar y Eliminar, además, piden
 // confirmación explícita antes de ejecutarse, porque tienen efecto real
 // sobre un aviso que existe de verdad en la cuenta de Mercado Libre.
-type Props = { dominio: string; canal: Canal; estado: string; tieneExternalId: boolean };
+type VehiculoResumen = { marca: string; modelo: string; anio: string; precio: string; descripcion: string; fotos: string[] };
+type Props = { dominio: string; canal: Canal; estado: string; tieneExternalId: boolean; vehiculo: VehiculoResumen };
 
 type AccionPendiente =
   | { tipo: "publicar" }
@@ -35,12 +37,13 @@ type AccionPendiente =
 
 const NOMBRE_CANAL: Record<Canal, string> = { mercadolibre: "Mercado Libre", facebook: "Facebook", instagram: "Instagram" };
 
-export default function CanalAccionesMenu({ dominio, canal, estado, tieneExternalId }: Props) {
+export default function CanalAccionesMenu({ dominio, canal, estado, tieneExternalId, vehiculo }: Props) {
   const router = useRouter();
   const { mostrar } = useToast();
   const [abierto, setAbierto] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [confirmando, setConfirmando] = useState<AccionPendiente | null>(null);
+  const [editando, setEditando] = useState(false);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const esMl = canal === "mercadolibre";
 
@@ -52,7 +55,7 @@ export default function CanalAccionesMenu({ dominio, canal, estado, tieneExterna
     return () => document.removeEventListener("mousedown", alHacerClicAfuera);
   }, []);
 
-  async function ejecutar(fn: () => Promise<Response>, mensajeExito: string) {
+  async function ejecutar(fn: () => Promise<Response>, mensajeExito: string): Promise<boolean> {
     setCargando(true);
     setAbierto(false);
     setConfirmando(null);
@@ -61,27 +64,30 @@ export default function CanalAccionesMenu({ dominio, canal, estado, tieneExterna
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         mostrar("error", (data && data.error) || "No se pudo completar la acción. Probá de nuevo.");
-        return;
+        return false;
       }
       mostrar("exito", mensajeExito);
       router.refresh();
+      return true;
     } catch {
       mostrar("error", "No se pudo conectar con el servicio. Revisá tu conexión y probá de nuevo.");
+      return false;
     } finally {
       setCargando(false);
     }
   }
 
-  function publicar() {
-    return ejecutar(
+  async function publicar(payload: { titulo?: string; descripcion?: string; mensaje?: string; fotoIndice?: number }) {
+    const exito = await ejecutar(
       () =>
         fetch(`/api/stock/${encodeURIComponent(dominio)}/publicar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ canal }),
+          body: JSON.stringify({ canal, ...payload }),
         }),
       `Publicado en ${NOMBRE_CANAL[canal]}.`
     );
+    if (exito) setEditando(false);
   }
 
   function accionMl(accion: "pausar" | "reanudar" | "eliminar" | "cancelar") {
@@ -110,13 +116,20 @@ export default function CanalAccionesMenu({ dominio, canal, estado, tieneExterna
   }
 
   function confirmarYEjecutar(pendiente: AccionPendiente) {
+    if (pendiente.tipo === "publicar") {
+      // Publicar siempre pasa primero por el modal de edición/preview -nunca
+      // se publica de verdad con un solo clic sin que la agencia vea qué
+      // texto y qué foto se van a usar.
+      setAbierto(false);
+      setEditando(true);
+      return;
+    }
     if (pendiente.tipo === "ml" && (pendiente.accion === "pausar" || pendiente.accion === "eliminar")) {
       setAbierto(false);
       setConfirmando(pendiente);
       return;
     }
-    if (pendiente.tipo === "publicar") publicar();
-    else if (pendiente.tipo === "verificar") verificar();
+    if (pendiente.tipo === "verificar") verificar();
     else if (pendiente.tipo === "ml") accionMl(pendiente.accion);
   }
 
@@ -176,6 +189,15 @@ export default function CanalAccionesMenu({ dominio, canal, estado, tieneExterna
           textoConfirmar="Eliminar"
           onConfirmar={() => accionMl("eliminar")}
           onCancelar={() => setConfirmando(null)}
+        />
+      )}
+      {editando && (
+        <PublicarCanalModal
+          canal={canal}
+          vehiculo={vehiculo}
+          cargando={cargando}
+          onConfirmar={publicar}
+          onCancelar={() => setEditando(false)}
         />
       )}
     </div>

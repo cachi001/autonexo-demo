@@ -149,7 +149,20 @@ export default async function CanalesExternosPage() {
                                   <ExternalLink className="h-2.5 w-2.5" strokeWidth={2} />
                                 </a>
                               )}
-                              <CanalAccionesMenu dominio={v.dominio} canal={c} estado={estado} tieneExternalId={Boolean(pub?.external_id)} />
+                              <CanalAccionesMenu
+                                dominio={v.dominio}
+                                canal={c}
+                                estado={estado}
+                                tieneExternalId={Boolean(pub?.external_id)}
+                                vehiculo={{
+                                  marca: v.marca,
+                                  modelo: v.modelo,
+                                  anio: v.anio,
+                                  precio: v.precio,
+                                  descripcion: v.descripcion,
+                                  fotos: v.fotos,
+                                }}
+                              />
                             </div>
                             {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
                               <div
