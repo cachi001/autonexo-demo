@@ -20,7 +20,14 @@ const GRAPH_VERSION = "v21.0";
 const GRAPH_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
 const AUTH_URL = "https://www.facebook.com/" + GRAPH_VERSION + "/dialog/oauth";
 
-const SCOPES = ["pages_show_list", "pages_manage_posts", "pages_read_engagement", "instagram_basic", "instagram_content_publish"];
+const SCOPES = [
+  "pages_show_list",
+  "pages_manage_posts",
+  "pages_read_engagement",
+  "instagram_basic",
+  "instagram_content_publish",
+  "business_management",
+];
 
 export function urlAutorizacion(redirectUri: string, state: string): string {
   const appId = process.env.META_APP_ID;
