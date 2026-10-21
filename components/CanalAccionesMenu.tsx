@@ -67,7 +67,11 @@ export default function CanalAccionesMenu({ dominio, canal, estado, tieneExterna
       const res = await fn();
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        mostrar("error", (data && data.error) || "No se pudo completar la acción. Probá de nuevo.");
+        // Humanizado acá también -antes mostraba el error crudo de la API
+        // (ej. inglés/código de Meta tipo "(#10) Insufficient permissions"),
+        // violando la regla del proyecto de nunca mostrar jerga técnica.
+        const mensajeCrudo = data && data.error;
+        mostrar("error", mensajeCrudo ? humanizarError(mensajeCrudo).mensaje : "No se pudo completar la acción. Probá de nuevo.");
         return false;
       }
       mostrar("exito", mensajeExito);
