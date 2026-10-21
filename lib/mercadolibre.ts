@@ -231,6 +231,40 @@ async function obtenerMotivoModeracion(itemId: string, accessToken: string): Pro
   }
 }
 
+// Atributos propios del vehículo (no título/precio/condición/descripción,
+// que son campos del ítem en sí) -extraído para reusar tanto al crear el
+// aviso como al actualizar uno ya creado, que antes NO mandaba ninguno de
+// estos (ver comentario en actualizarItem: bug real encontrado 2026-10-21,
+// la agencia no podía corregir descripción/tipo de moto/garantías una vez
+// que ya existía un intento previo en ML, porque /publicar reusa ese mismo
+// ítem con actualizarItem en vez de crear uno nuevo).
+export function construirAtributos(
+  input: Pick<
+    PublicarItemInput,
+    "marca" | "modelo" | "anio" | "km" | "dominio" | "tipoMoto" | "version" | "combustible" | "puertas" | "chasis" | "garantiaFabrica" | "garantiaMecanica" | "entregaDomicilio"
+  >
+) {
+  const esMoto = Boolean(input.tipoMoto?.trim());
+  return [
+    { id: "BRAND", value_name: input.marca },
+    { id: "MODEL", value_name: input.modelo },
+    { id: "VEHICLE_YEAR", value_name: input.anio },
+    { id: "KILOMETERS", value_name: `${input.km} km` },
+    { id: "LICENSE_PLATE", value_name: input.dominio.toUpperCase().replace(/[\s-]/g, "") },
+    ...(esMoto
+      ? [{ id: "MOTO_TYPE", value_name: input.tipoMoto as string }]
+      : [
+          { id: "TRIM", value_name: input.version as string },
+          { id: "FUEL_TYPE", value_name: input.combustible as string },
+          { id: "DOORS", value_name: input.puertas as string },
+          { id: "VIN_LAST_DIGITS", value_name: (input.chasis as string).trim().slice(-6).toUpperCase() },
+          { id: "WITH_FACTORY_WARRANTY", value_name: input.garantiaFabrica ? "Sí" : "No" },
+          { id: "WITH_MECHANICAL_WARRANTY", value_name: input.garantiaMecanica ? "Sí" : "No" },
+          { id: "CAR_DELIVERY", value_name: input.entregaDomicilio ? "Sí" : "No" },
+        ]),
+  ];
+}
+
 export async function publicarItem(input: PublicarItemInput) {
   const esMoto = Boolean(input.tipoMoto?.trim());
   if (esMoto) {
@@ -295,39 +329,7 @@ export async function publicarItem(input: PublicarItemInput) {
       state: { id: input.provinciaId, name: input.provinciaNombre },
       city: { name: input.ciudad },
     },
-    attributes: [
-      { id: "BRAND", value_name: input.marca },
-      { id: "MODEL", value_name: input.modelo },
-      { id: "VEHICLE_YEAR", value_name: input.anio },
-      // KILOMETERS es un atributo de tipo "number_unit" en ML -rechaza un
-      // número pelado, exige la unidad pegada al valor (confirmado en vivo:
-      // "The provided unit is not valid... [km]").
-      { id: "KILOMETERS", value_name: `${input.km} km` },
-      // LICENSE_PLATE existe en ambas categorías (auto y moto), va sin
-      // guión/espacios, como se guarda el dominio en el stock.
-      { id: "LICENSE_PLATE", value_name: input.dominio.toUpperCase().replace(/[\s-]/g, "") },
-      // A partir de acá, todo lo que sigue es específico de cada categoría
-      // -confirmado en vivo que TRIM/FUEL_TYPE/DOORS/VIN_LAST_DIGITS no
-      // existen en la categoría Motos (MLA1763), y MOTO_TYPE no existe en
-      // Autos (MLA1744). Mandar el atributo equivocado para la categoría
-      // rechaza la publicación completa, no solo ese campo.
-      ...(esMoto
-        ? [{ id: "MOTO_TYPE", value_name: input.tipoMoto as string }]
-        : [
-            { id: "TRIM", value_name: input.version as string },
-            { id: "FUEL_TYPE", value_name: input.combustible as string },
-            { id: "DOORS", value_name: input.puertas as string },
-            // Últimos 6 del chasis -obligatorio en MLA desde oct-2024 para
-            // autos (ver comentario en PublicarItemInput).
-            { id: "VIN_LAST_DIGITS", value_name: (input.chasis as string).trim().slice(-6).toUpperCase() },
-            // Garantía y entrega a domicilio -opcionales, elegidos por la
-            // agencia. Confirmado en vivo (GET /categories/MLA1744/attributes)
-            // que estos tres existen de verdad para la categoría de autos.
-            { id: "WITH_FACTORY_WARRANTY", value_name: input.garantiaFabrica ? "Sí" : "No" },
-            { id: "WITH_MECHANICAL_WARRANTY", value_name: input.garantiaMecanica ? "Sí" : "No" },
-            { id: "CAR_DELIVERY", value_name: input.entregaDomicilio ? "Sí" : "No" },
-          ]),
-    ],
+    attributes: construirAtributos(input),
   };
 
   const res = await fetch(`${API_URL}/items`, {
@@ -375,26 +377,65 @@ export async function publicarItem(input: PublicarItemInput) {
   return { ok: false as const, error: detalle };
 }
 
-// Actualiza precio/título de un ítem YA creado en ML -se usa cuando la
-// agencia corrige el precio de un vehículo que había quedado "en revisión"
-// (ej. por estar debajo del piso de mercado): había que actualizar el
-// mismo aviso, no crear uno nuevo -crear de nuevo hubiera dejado dos
-// publicaciones del mismo auto en la cuenta real de ML.
+// Actualiza un ítem YA creado en ML -se usa cuando la agencia reintenta
+// publicar un vehículo que ya tiene un aviso real (quedó "en revisión", con
+// error, o simplemente se está corrigiendo), para no crear un segundo aviso
+// duplicado del mismo auto.
+//
+// Bug real encontrado el 2026-10-21: esta función solo aceptaba
+// price/title/status -cualquier cambio de descripción, condición, tipo de
+// moto o garantías que la agencia hiciera en el modal de "Publicar en
+// canales" se perdía en silencio apenas el vehículo ya tenía un intento
+// previo en ML (que es el caso común: casi todo reintento pasa por acá, no
+// por publicarItem). La agencia literalmente no podía cambiar la
+// descripción después del primer intento, aunque el campo del modal se viera
+// editable. "price"/"title"/"status"/"condition"/"attributes" SÍ se mandan
+// por el PUT principal de /items/{id} (confirmado contra la documentación
+// oficial de ML), pero "description" NO -ML la maneja como un sub-recurso
+// aparte, hace falta un PUT separado a /items/{id}/description.
 export async function actualizarItem(
   itemId: string,
   accessToken: string,
-  cambios: { price?: number; title?: string; status?: "active" | "paused" | "closed" }
+  cambios: {
+    price?: number;
+    title?: string;
+    status?: "active" | "paused" | "closed";
+    condition?: "new" | "used";
+    descripcion?: string;
+    atributos?: { id: string; value_name: string }[];
+  }
 ) {
+  const { descripcion, atributos, ...resto } = cambios;
+  const body: Record<string, unknown> = { ...resto };
+  if (atributos) body.attributes = atributos;
+
   const res = await fetch(`${API_URL}/items/${itemId}`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(cambios),
+    body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) {
     const detalle = data?.cause?.map((c: { message?: string }) => c.message).join("; ") || data?.message || JSON.stringify(data);
     return { ok: false as const, error: detalle };
   }
+
+  // Sub-recurso aparte -un error acá no se trata como fracaso de la
+  // publicación entera (el ítem en sí ya se actualizó bien), pero si falla
+  // la agencia se entera via error_msg en vez de creer que se guardó.
+  let errorDescripcion: string | null = null;
+  if (descripcion !== undefined) {
+    const resDesc = await fetch(`${API_URL}/items/${itemId}/description`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ plain_text: descripcion }),
+    });
+    if (!resDesc.ok) {
+      const dataDesc = await resDesc.json().catch(() => ({}));
+      errorDescripcion = dataDesc?.message || "No se pudo actualizar la descripción.";
+    }
+  }
+
   if (data.status === "under_review") {
     const motivo = await obtenerMotivoModeracion(itemId, accessToken);
     return {
@@ -405,7 +446,12 @@ export async function actualizarItem(
       error: motivo || "Mercado Libre sigue sin mostrar el aviso, revisalo de nuevo en unos minutos.",
     };
   }
-  return { ok: true as const, externalId: itemId, permalink: data.permalink as string };
+  return {
+    ok: true as const,
+    externalId: itemId,
+    permalink: data.permalink as string,
+    advertencia: errorDescripcion || undefined,
+  };
 }
 
 // Consulta el estado REAL de un ítem ya publicado -necesario para la

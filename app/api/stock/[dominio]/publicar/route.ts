@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buscarVehiculo, obtenerCanalConectado, guardarCanalConectado, listarPublicaciones, setPublicacion, obtenerAgencia, Canal } from "@/lib/data";
-import { publicarItem, actualizarItem, refrescarToken } from "@/lib/mercadolibre";
+import { publicarItem, actualizarItem, refrescarToken, construirAtributos } from "@/lib/mercadolibre";
 import { publicarEnFacebook, publicarEnInstagram } from "@/lib/meta";
 import { agenciaDesdeRequest } from "@/lib/auth";
 
@@ -137,11 +137,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
     const publicacionesPrevias = await listarPublicaciones(vehiculo.dominio);
     const previaMl = publicacionesPrevias.find((p) => p.canal === "mercadolibre" && p.external_id);
 
+    // Antes esta rama solo mandaba price/title -cualquier cambio de
+    // descripción, condición, tipo de moto o garantías que la agencia hiciera
+    // en el modal se perdía en silencio apenas el vehículo ya tenía un
+    // intento previo en ML (bug real encontrado 2026-10-21: la agencia no
+    // podía corregir la descripción, justamente porque casi todo reintento
+    // pasa por ACÁ, no por publicarItem). Ahora manda los mismos campos que
+    // un alta nueva.
+    const cambiosActualizacion = {
+      price: datosItem.precio,
+      title: datosItem.titulo.slice(0, 60),
+      condition: datosItem.condicion,
+      descripcion: datosItem.descripcion,
+      atributos: construirAtributos(datosItem),
+    };
     let resultado = previaMl
-      ? await actualizarItem(previaMl.external_id, conectado.access_token, {
-          price: datosItem.precio,
-          title: datosItem.titulo,
-        })
+      ? await actualizarItem(previaMl.external_id, conectado.access_token, cambiosActualizacion)
       : await publicarItem({ accessToken: conectado.access_token, ...datosItem });
     // Red de seguridad además del chequeo de expires_at de arriba: si ML
     // igual rechaza el token (puede invalidarlo antes de la fecha que él
@@ -160,10 +171,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
           cuenta_externa_nombre: conectado.cuenta_externa_nombre,
         });
         resultado = previaMl
-          ? await actualizarItem(previaMl.external_id, conectado.access_token, {
-              price: datosItem.precio,
-              title: datosItem.titulo,
-            })
+          ? await actualizarItem(previaMl.external_id, conectado.access_token, cambiosActualizacion)
           : await publicarItem({ accessToken: conectado.access_token, ...datosItem });
       } catch {
         // Si la renovación en sí falla, se informa el error original de ML.
