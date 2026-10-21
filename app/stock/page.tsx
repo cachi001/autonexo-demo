@@ -54,14 +54,9 @@ export default function StockPage() {
                   ? "1 publicación necesita tu atención"
                   : `${erroresPublicacion.length} publicaciones necesitan tu atención`}
               </div>
-              {(() => {
-                const { mensaje, detalleTecnico } = humanizarError(erroresPublicacion[0].error_msg);
-                return (
-                  <div className="truncate text-xs text-red-600" title={detalleTecnico || undefined}>
-                    {erroresPublicacion[0].marca} {erroresPublicacion[0].modelo} — {mensaje}
-                  </div>
-                );
-              })()}
+              <div className="truncate text-xs text-red-600">
+                {erroresPublicacion[0].marca} {erroresPublicacion[0].modelo} — {humanizarError(erroresPublicacion[0].error_msg).mensaje}
+              </div>
             </div>
             <ArrowRight className="h-4 w-4 shrink-0 text-red-400" strokeWidth={2} />
           </Link>

@@ -670,19 +670,11 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
                       <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${label.clase}`}>
                         {label.texto}
                       </span>
-                      {(estado === "error" || estado === "en_revision") && pub?.error_msg && (() => {
-                        const { mensaje, detalleTecnico } = humanizarError(pub.error_msg);
-                        return (
-                          <div
-                            title={detalleTecnico || undefined}
-                            className={`mt-1 line-clamp-2 max-w-xs text-xs leading-snug font-medium ${
-                              estado === "en_revision" ? "text-amber-700" : "text-red-600"
-                            } ${detalleTecnico ? "cursor-help underline decoration-dotted" : ""}`}
-                          >
-                            {mensaje}
-                          </div>
-                        );
-                      })()}
+                      {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
+                        <div className={`mt-1 text-xs font-medium ${estado === "en_revision" ? "text-amber-700" : "text-red-600"}`}>
+                          {humanizarError(pub.error_msg).mensaje}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

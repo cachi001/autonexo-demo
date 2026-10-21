@@ -165,19 +165,22 @@ export default async function CanalesExternosPage() {
                                 }}
                               />
                             </div>
-                            {(estado === "error" || estado === "en_revision") && pub?.error_msg && (() => {
-                              const { mensaje, detalleTecnico } = humanizarError(pub.error_msg);
-                              return (
-                                <div
-                                  title={detalleTecnico || undefined}
-                                  className={`mt-1 line-clamp-2 max-w-xs text-xs leading-snug font-medium ${
-                                    estado === "en_revision" ? "text-amber-700" : "text-red-700"
-                                  } ${detalleTecnico ? "cursor-help underline decoration-dotted" : ""}`}
-                                >
-                                  {mensaje}
-                                </div>
-                              );
-                            })()}
+                            {/* Una sola línea, nunca se corta -si no entra,
+                                scrollea el contenedor de la tabla entera
+                                (overflow-x-auto de abajo), no el texto. Antes
+                                venía con title+cursor-help (tooltip nativo
+                                del navegador) para "ver el detalle técnico",
+                                mal UX: ese popup del navegador no sirve de
+                                nada, se sacó. */}
+                            {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
+                              <div
+                                className={`mt-1 whitespace-nowrap text-xs font-medium ${
+                                  estado === "en_revision" ? "text-amber-700" : "text-red-700"
+                                }`}
+                              >
+                                {humanizarError(pub.error_msg).mensaje}
+                              </div>
+                            )}
                           </td>
                         );
                       })}
