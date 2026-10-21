@@ -111,7 +111,16 @@ export async function conectarPrimeraPagina(code: string, redirectUri: string): 
   if (paginas.length === 0) {
     throw new Error("Tu cuenta de Meta no tiene ninguna Página de Facebook asociada. Creá una Página antes de conectar.");
   }
-  const pagina = paginas[0];
+  // Bug real encontrado el 2026-10-21: con más de una Página devuelta por
+  // /me/accounts (ej. el usuario administra Páginas de más de un Business
+  // Manager), esto agarraba siempre paginas[0] sin mirar si esa era la
+  // Página con Instagram vinculado -la cuenta real tenía Instagram
+  // funcionando en una Página, se reconectó, y la nueva corrida eligió OTRA
+  // Página (sin Instagram) solo por venir primero en la lista, perdiendo la
+  // conexión de Instagram en silencio (quedó "No conectado" sin que nadie la
+  // desconectara a propósito). Ahora prioriza la primera Página que SÍ
+  // tenga una cuenta de Instagram profesional vinculada.
+  const pagina = paginas.find((p) => p.instagram_business_account?.id) || paginas[0];
   // Si la Página se encontró con el token corto, su access_token hereda esa
   // misma corta duración (horas, no 60 días) -se extiende también, para que
   // no quede guardada una conexión que en los hechos vence casi enseguida.
