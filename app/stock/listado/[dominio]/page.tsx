@@ -9,6 +9,7 @@ import CanalAccionesMenu from "@/components/CanalAccionesMenu";
 import type { Canal } from "@/lib/data";
 import { humanizarError } from "@/lib/errores";
 import { useToast } from "@/components/Toast";
+import Lightbox from "@/components/Lightbox";
 
 type DocumentoVehiculo = { nombre: string; dataUrl: string };
 
@@ -19,6 +20,7 @@ type Vehiculo = {
   documentos: Record<string, DocumentoVehiculo | undefined>;
   documentacion_validada: boolean; documentacion_validada_fecha: string | null;
   vistas_reales: number; consultas_reales: number; fotos: string[];
+  titular_nombre: string; titular_domicilio: string; titular_dni: string;
 };
 
 const OPCIONES_COMBUSTIBLE = ["Nafta", "GNC", "Nafta/GNC", "Diésel", "Híbrido", "Eléctrico"];
@@ -75,6 +77,7 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   const { mostrar } = useToast();
   const [vehiculo, setVehiculo] = useState<Vehiculo | null>(null);
   const [fotoActiva, setFotoActiva] = useState(0);
+  const [lightboxAbierto, setLightboxAbierto] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
@@ -110,6 +113,12 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
   const [editandoPrecio, setEditandoPrecio] = useState(false);
   const [precioEdit, setPrecioEdit] = useState("");
   const [guardandoPrecio, setGuardandoPrecio] = useState(false);
+
+  // --- Editar año -antes solo entraba por OCR de cédula o planilla, sin
+  // forma de corregirlo a mano si quedaba vacío (bloqueaba publicar en ML). ---
+  const [editandoAnio, setEditandoAnio] = useState(false);
+  const [anioEdit, setAnioEdit] = useState("");
+  const [guardandoAnio, setGuardandoAnio] = useState(false);
 
   async function pedirCaptchaDnrpa() {
     setCargandoCaptcha(true);
@@ -159,6 +168,7 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
     setPuertas(v.puertas || "");
     setChasisEdit(v.chasis || "");
     setPrecioEdit(v.precio || "");
+    setAnioEdit(v.anio || "");
   }
   useEffect(() => { cargar(); }, [dominio]);
 
@@ -174,6 +184,26 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
       await cargar();
     } finally {
       setGuardandoPrecio(false);
+    }
+  }
+
+  async function guardarAnio() {
+    setGuardandoAnio(true);
+    try {
+      const res = await fetch(`/api/stock/${encodeURIComponent(dominio)}/anio`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ anio: anioEdit }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        mostrar("error", (data && data.error) || "No se pudo guardar el año.");
+        return;
+      }
+      setEditandoAnio(false);
+      await cargar();
+    } finally {
+      setGuardandoAnio(false);
     }
   }
 
@@ -283,8 +313,13 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
             <div className="relative flex h-64 items-center justify-center overflow-hidden rounded-lg bg-zinc-50">
               {fotos.length > 0 ? (
                 <>
-                  <img src={fotos[fotoActiva]} alt={`${vehiculo.marca} ${vehiculo.modelo}`} className="h-full w-full object-cover" />
-                  <button onClick={() => quitarFoto(fotoActiva)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 shadow">
+                  <button onClick={() => setLightboxAbierto(true)} className="h-full w-full cursor-zoom-in" aria-label="Ver foto en grande">
+                    <img src={fotos[fotoActiva]} alt={`${vehiculo.marca} ${vehiculo.modelo}`} className="h-full w-full object-cover" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); quitarFoto(fotoActiva); }}
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 shadow"
+                  >
                     <X className="h-4 w-4" strokeWidth={2} />
                   </button>
                 </>
@@ -346,7 +381,29 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-zinc-50 p-3 text-sm">
-              <div><span className="text-xs text-zinc-400">Año</span><div className="font-medium">{vehiculo.anio || "—"}</div></div>
+              <div>
+                <span className="text-xs text-zinc-400">Año</span>
+                {editandoAnio ? (
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      value={anioEdit}
+                      onChange={(e) => setAnioEdit(e.target.value)}
+                      className="w-20 rounded-md border border-zinc-300 px-1.5 py-0.5 text-sm"
+                      autoFocus
+                    />
+                    <button onClick={guardarAnio} disabled={guardandoAnio} className="rounded-md bg-emerald-600 px-1.5 py-0.5 text-[11px] font-semibold text-white disabled:opacity-50">
+                      {guardandoAnio ? "..." : "OK"}
+                    </button>
+                    <button onClick={() => { setEditandoAnio(false); setAnioEdit(vehiculo.anio); }} className="text-[11px] text-zinc-400 hover:text-zinc-600">✕</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setEditandoAnio(true)} className="flex items-center gap-1 font-medium hover:underline">
+                    {vehiculo.anio || "—"}
+                    <span className="text-[10px] font-normal text-zinc-400">(editar)</span>
+                  </button>
+                )}
+              </div>
               <div><span className="text-xs text-zinc-400">Km</span><div className="font-medium">{vehiculo.km || "—"}</div></div>
               <div><span className="text-xs text-zinc-400">Color</span><div className="font-medium">{vehiculo.color || "—"}</div></div>
               <div><span className="text-xs text-zinc-400">Tipo</span><div className="font-medium">{vehiculo.tipo || "—"}</div></div>
@@ -571,6 +628,22 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
           )}
         </div>
 
+        {/* Datos del titular -vienen del OCR de la cédula verde pero antes
+            no se mostraban en ningún lado de la ficha, aunque se guardan
+            (lib/data.ts, titular_nombre/titular_domicilio/titular_dni). Solo
+            lectura por ahora: no hay flujo de edición pedido para esto. */}
+        {(vehiculo.titular_nombre || vehiculo.titular_domicilio || vehiculo.titular_dni) && (
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="mb-1 text-sm font-semibold">Datos del titular (cédula)</h2>
+            <p className="mb-3 text-xs text-zinc-500">Leídos de la cédula verde al cargar el vehículo.</p>
+            <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
+              <div><span className="text-zinc-400">Nombre</span><div className="font-medium text-zinc-800">{vehiculo.titular_nombre || "—"}</div></div>
+              <div><span className="text-zinc-400">DNI</span><div className="font-medium text-zinc-800">{vehiculo.titular_dni || "—"}</div></div>
+              <div><span className="text-zinc-400">Domicilio</span><div className="font-medium text-zinc-800">{vehiculo.titular_domicilio || "—"}</div></div>
+            </div>
+          </div>
+        )}
+
         {/* Publicación a canales externos -nunca automática: botón explícito por
             canal (principio P7, "la IA propone, la persona aprueba"). */}
         <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
@@ -597,15 +670,19 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
                       <span className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${label.clase}`}>
                         {label.texto}
                       </span>
-                      {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
-                        <div
-                          className={`mt-1 max-w-xs text-xs leading-snug font-medium ${
-                            estado === "en_revision" ? "text-amber-700" : "text-red-600"
-                          }`}
-                        >
-                          {humanizarError(pub.error_msg)}
-                        </div>
-                      )}
+                      {(estado === "error" || estado === "en_revision") && pub?.error_msg && (() => {
+                        const { mensaje, detalleTecnico } = humanizarError(pub.error_msg);
+                        return (
+                          <div
+                            title={detalleTecnico || undefined}
+                            className={`mt-1 line-clamp-2 max-w-xs text-xs leading-snug font-medium ${
+                              estado === "en_revision" ? "text-amber-700" : "text-red-600"
+                            } ${detalleTecnico ? "cursor-help underline decoration-dotted" : ""}`}
+                          >
+                            {mensaje}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -717,6 +794,10 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
           </div>
         </div>
       </main>
+
+      {lightboxAbierto && (
+        <Lightbox fotos={fotos} indice={fotoActiva} onCerrar={() => setLightboxAbierto(false)} onCambiar={setFotoActiva} />
+      )}
     </>
   );
 }

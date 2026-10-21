@@ -9,7 +9,13 @@
 // compra directa con envío), usar buying_mode="classified" es lo que exige
 // la propia API para la categoría de autos, confirmado en su documentación
 // pública de categorías de vehículos.
-import { humanizarError } from "@/lib/errores";
+//
+// El detalle técnico de ML (siempre en inglés, incluso en el sitio
+// argentino) se guarda CRUDO en error_msg -la traducción a español
+// (lib/errores.ts, humanizarError) se aplica una sola vez, al mostrarlo en
+// la UI, no acá. Antes esta función humanizaba antes de guardar y la UI
+// volvía a humanizar al leer -doble paso innecesario que además se rompía
+// si humanizarError dejaba de devolver un string plano.
 
 const SITE = "MLA";
 const AUTH_URL = "https://auth.mercadolibre.com.ar/authorization";
@@ -366,7 +372,7 @@ export async function publicarItem(input: PublicarItemInput) {
   // mostramos a la agencia, pero traducido (ver humanizarErrorML): el
   // detalle crudo de ML viene en inglés incluso en el sitio argentino.
   const detalle = data?.cause?.map((c: { message?: string }) => c.message).join("; ") || data?.message || JSON.stringify(data);
-  return { ok: false as const, error: humanizarError(detalle) };
+  return { ok: false as const, error: detalle };
 }
 
 // Actualiza precio/título de un ítem YA creado en ML -se usa cuando la
@@ -387,7 +393,7 @@ export async function actualizarItem(
   const data = await res.json();
   if (!res.ok) {
     const detalle = data?.cause?.map((c: { message?: string }) => c.message).join("; ") || data?.message || JSON.stringify(data);
-    return { ok: false as const, error: humanizarError(detalle) };
+    return { ok: false as const, error: detalle };
   }
   if (data.status === "under_review") {
     const motivo = await obtenerMotivoModeracion(itemId, accessToken);

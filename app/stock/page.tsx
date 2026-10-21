@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Camera, FileText, Car, MessageCircle, Eye, CheckCircle2, ArrowRight, AlertTriangle,
+  Camera, FileText, Car, MessageCircle, ArrowRight, AlertTriangle,
 } from "lucide-react";
 import { humanizarError } from "@/lib/errores";
 
@@ -20,9 +20,10 @@ export default function StockPage() {
   const [stock, setStock] = useState<Vehiculo[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [erroresPublicacion, setErroresPublicacion] = useState<PublicacionError[]>([]);
+  const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    fetch("/api/stock").then((r) => r.json()).then((d) => setStock(d.vehiculos || []));
+    fetch("/api/stock").then((r) => r.json()).then((d) => setStock(d.vehiculos || [])).finally(() => setCargando(false));
     fetch("/api/leads").then((r) => r.json()).then((d) => setLeads(d.leads || []));
     fetch("/api/publicaciones/errores").then((r) => r.json()).then((d) => setErroresPublicacion(d.errores || []));
   }, []);
@@ -53,36 +54,47 @@ export default function StockPage() {
                   ? "1 publicación necesita tu atención"
                   : `${erroresPublicacion.length} publicaciones necesitan tu atención`}
               </div>
-              <div className="truncate text-xs text-red-600">
-                {erroresPublicacion[0].marca} {erroresPublicacion[0].modelo} — {humanizarError(erroresPublicacion[0].error_msg)}
-              </div>
+              {(() => {
+                const { mensaje, detalleTecnico } = humanizarError(erroresPublicacion[0].error_msg);
+                return (
+                  <div className="truncate text-xs text-red-600" title={detalleTecnico || undefined}>
+                    {erroresPublicacion[0].marca} {erroresPublicacion[0].modelo} — {mensaje}
+                  </div>
+                );
+              })()}
             </div>
             <ArrowRight className="h-4 w-4 shrink-0 text-red-400" strokeWidth={2} />
           </Link>
         )}
 
-        {/* Stat cards */}
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="relative overflow-hidden rounded-xl bg-blue-600 p-4 text-white shadow-sm">
-            <Car className="absolute -right-2 -top-2 h-16 w-16 opacity-20" strokeWidth={1.5} />
-            <div className="relative text-[11px] font-medium uppercase tracking-wide text-blue-100">En stock</div>
-            <div className="relative mt-1 text-3xl font-bold">{stock.length}</div>
-          </div>
-          <div className="relative overflow-hidden rounded-xl bg-violet-600 p-4 text-white shadow-sm">
-            <Eye className="absolute -right-2 -top-2 h-16 w-16 opacity-20" strokeWidth={1.5} />
-            <div className="relative text-[11px] font-medium uppercase tracking-wide text-violet-100">Vistas totales</div>
-            <div className="relative mt-1 text-3xl font-bold">{totalVistas}</div>
-          </div>
-          <div className="relative overflow-hidden rounded-xl bg-amber-600 p-4 text-white shadow-sm">
-            <MessageCircle className="absolute -right-2 -top-2 h-16 w-16 opacity-20" strokeWidth={1.5} />
-            <div className="relative text-[11px] font-medium uppercase tracking-wide text-amber-100">Consultas pendientes</div>
-            <div className="relative mt-1 text-3xl font-bold">{pendientes}</div>
-          </div>
-          <div className="relative overflow-hidden rounded-xl bg-emerald-600 p-4 text-white shadow-sm">
-            <CheckCircle2 className="absolute -right-2 -top-2 h-16 w-16 opacity-20" strokeWidth={1.5} />
-            <div className="relative text-[11px] font-medium uppercase tracking-wide text-emerald-100">Papeles validados</div>
-            <div className="relative mt-1 text-3xl font-bold">{validados}/{stock.length}</div>
-          </div>
+        {/* Antes: 4 tarjetas blancas con ícono + borde de color a la
+            izquierda -el "stat card" por defecto de cualquier dashboard
+            generado por IA, sin relación con lo que hace esta agencia en el
+            día a día. En su lugar: una ficha de resumen con la misma lógica
+            visual que un informe de dominio o una planilla de stock real
+            -una sola franja con separadores finos (no cuatro cajas con
+            sombra), números en tipografía monoespaciada tabular (así se ven
+            los datos en un registro/informe, no en un panel de SaaS
+            genérico), con un punto de color en vez de un ícono para
+            mantener la referencia visual rápida sin el cliché del "icon
+            chip". */}
+        <section className="grid grid-cols-2 divide-x divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white sm:grid-cols-4 sm:divide-y-0">
+          {[
+            { label: "En stock", valor: stock.length, punto: "bg-blue-500" },
+            { label: "Vistas totales", valor: totalVistas, punto: "bg-violet-500" },
+            { label: "Consultas pendientes", valor: pendientes, punto: "bg-amber-500" },
+            { label: "Papeles validados", valor: `${validados}/${stock.length}`, punto: "bg-emerald-500" },
+          ].map((m) => (
+            <div key={m.label} className="p-4 sm:p-5">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                <span className={`h-1.5 w-1.5 rounded-full ${m.punto}`} />
+                {m.label}
+              </div>
+              <div className="mt-1.5 font-mono text-3xl font-bold tabular-nums text-zinc-900">
+                {cargando ? <span className="inline-block h-8 w-12 animate-pulse rounded bg-zinc-100 align-middle" /> : m.valor}
+              </div>
+            </div>
+          ))}
         </section>
 
         {/* CTAs a páginas dedicadas */}

@@ -188,8 +188,13 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
           </button>
         </div>
 
-        <div className="grid gap-8 overflow-y-auto p-6 sm:grid-cols-2">
-          <div className="space-y-5">
+        {/* Dos columnas con scroll INDEPENDIENTE -antes todo el grid era un
+            solo contenedor con scroll, así que bajar el formulario (largo,
+            con muchos campos) arrastraba la vista previa de la derecha con
+            él, aunque la preview entrara entera en pantalla. Ahora cada
+            columna tiene su propio overflow-y-auto y su propia altura. */}
+        <div className="grid min-h-0 flex-1 gap-8 overflow-hidden p-6 sm:grid-cols-2">
+          <div className="min-h-0 space-y-5 overflow-y-auto pr-1">
             {esMl ? (
               <>
                 <div>
@@ -348,7 +353,7 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
             )}
           </div>
 
-          <div>
+          <div className="min-h-0 overflow-y-auto pr-1">
             <label className="mb-1.5 block text-sm font-semibold text-zinc-600">Vista previa</label>
 
             {esMl ? (

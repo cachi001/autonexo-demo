@@ -96,11 +96,11 @@ export default async function CanalesExternosPage() {
           <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm">
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
-                <tr className="border-b border-zinc-200 bg-zinc-50 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  <th className="px-3 py-2.5">Vehículo</th>
-                  <th className="px-3 py-2.5">Precio</th>
+                <tr className="border-b border-zinc-200 bg-zinc-100 text-xs font-bold uppercase tracking-wide text-zinc-900">
+                  <th className="h-14 px-3">Vehículo</th>
+                  <th className="h-14 px-3">Precio</th>
                   {canalesConectados.map((c) => (
-                    <th key={c} className="px-3 py-2.5">
+                    <th key={c} className="h-14 px-3">
                       <div className="flex items-center gap-1.5">
                         <CanalLogo canal={c} size={18} /> {NOMBRE_CANAL[c]}
                       </div>
@@ -165,15 +165,19 @@ export default async function CanalesExternosPage() {
                                 }}
                               />
                             </div>
-                            {(estado === "error" || estado === "en_revision") && pub?.error_msg && (
-                              <div
-                                className={`mt-1 max-w-xs text-xs leading-snug font-medium ${
-                                  estado === "en_revision" ? "text-amber-700" : "text-red-700"
-                                }`}
-                              >
-                                {humanizarError(pub.error_msg)}
-                              </div>
-                            )}
+                            {(estado === "error" || estado === "en_revision") && pub?.error_msg && (() => {
+                              const { mensaje, detalleTecnico } = humanizarError(pub.error_msg);
+                              return (
+                                <div
+                                  title={detalleTecnico || undefined}
+                                  className={`mt-1 line-clamp-2 max-w-xs text-xs leading-snug font-medium ${
+                                    estado === "en_revision" ? "text-amber-700" : "text-red-700"
+                                  } ${detalleTecnico ? "cursor-help underline decoration-dotted" : ""}`}
+                                >
+                                  {mensaje}
+                                </div>
+                              );
+                            })()}
                           </td>
                         );
                       })}

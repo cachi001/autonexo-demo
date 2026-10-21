@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { Camera, CheckCircle2, ArrowLeft, Loader2, ExternalLink } from "lucide-react";
 import CanalLogo from "@/components/CanalLogo";
+import Lightbox from "@/components/Lightbox";
 import type { Canal } from "@/lib/data";
 
 type Vehiculo = {
@@ -33,6 +34,7 @@ export default function FichaVehiculoPage({ params }: { params: Promise<{ domini
   const [errorCarga, setErrorCarga] = useState(false);
   const [intento, setIntento] = useState(0);
   const [fotoActiva, setFotoActiva] = useState(0);
+  const [lightboxAbierto, setLightboxAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [mensaje, setMensaje] = useState("");
@@ -115,7 +117,9 @@ export default function FichaVehiculoPage({ params }: { params: Promise<{ domini
           <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className={`relative flex h-72 items-center justify-center overflow-hidden rounded-lg ${accentFicha(vehiculo)}`}>
               {fotos.length > 0 ? (
-                <img src={fotos[fotoActiva]} alt={`${vehiculo.marca} ${vehiculo.modelo}`} className="h-full w-full object-cover" />
+                <button onClick={() => setLightboxAbierto(true)} className="h-full w-full cursor-zoom-in" aria-label="Ver foto en grande">
+                  <img src={fotos[fotoActiva]} alt={`${vehiculo.marca} ${vehiculo.modelo}`} className="h-full w-full object-cover" />
+                </button>
               ) : (
                 <div className="flex flex-col items-center gap-2 text-zinc-400">
                   <Camera className="h-8 w-8" strokeWidth={1.5} />
@@ -196,6 +200,10 @@ export default function FichaVehiculoPage({ params }: { params: Promise<{ domini
           </div>
         </div>
       </main>
+
+      {lightboxAbierto && (
+        <Lightbox fotos={fotos} indice={fotoActiva} onCerrar={() => setLightboxAbierto(false)} onCambiar={setFotoActiva} />
+      )}
     </div>
   );
 }

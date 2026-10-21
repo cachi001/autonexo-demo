@@ -511,6 +511,18 @@ export async function actualizarPrecio(dominio: string, agenciaId: string, preci
   return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
+// El año solo entraba por OCR de cédula o planilla -sin forma de corregirlo
+// a mano si quedaba vacío o mal leído (encontrado en vivo con la Zanella de
+// prueba, bloqueada para publicar en ML por "Año" faltante sin poder
+// arreglarlo desde la ficha). Mismo patrón que actualizarPrecio.
+export async function actualizarAnio(dominio: string, agenciaId: string, anio: string): Promise<Vehiculo | null> {
+  await asegurarTablas();
+  const filas = await sql`
+    UPDATE stock SET anio = ${anio} WHERE dominio = ${dominio} AND agencia_id = ${agenciaId} RETURNING *
+  `;
+  return filas[0] ? filaAVehiculo(filas[0]) : null;
+}
+
 export async function setFichaTecnica(
   dominio: string,
   agenciaId: string,
@@ -865,6 +877,18 @@ export async function listarPublicaciones(dominio: string): Promise<Publicacion[
   await asegurarTablas();
   const filas = await sql`SELECT * FROM publicaciones WHERE dominio = ${dominio}`;
   return filas.map(filaAPublicacion);
+}
+
+// Para el catálogo público en listado (no ficha individual): antes solo la
+// ficha de un vehículo (/catalogo/[dominio]) mostraba "también publicado
+// en", las tarjetas de /catalogo no tenían ningún indicio -el comprador no
+// podía saber que un auto ya estaba en Mercado Libre sin entrar a cada
+// ficha. Solo canal + link reales, igual criterio que listarPublicaciones
+// filtrado para la vista de comprador (sin tokens ni estados internos).
+export async function listarPublicacionesPublicas(): Promise<Pick<Publicacion, "dominio" | "canal" | "permalink">[]> {
+  await asegurarTablas();
+  const filas = await sql`SELECT dominio, canal, permalink FROM publicaciones WHERE estado = 'publicado' AND permalink <> ''`;
+  return filas.map((r) => ({ dominio: r.dominio as string, canal: r.canal as Canal, permalink: r.permalink as string }));
 }
 
 // Para la pantalla "Canales externos": TODO lo publicado por la agencia en

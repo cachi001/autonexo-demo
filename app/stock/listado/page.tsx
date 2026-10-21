@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Camera, CheckCircle2, LayoutGrid, Table2, Eye, MessageCircle } from "lucide-react";
 import CanalLogo from "@/components/CanalLogo";
 import type { Canal } from "@/lib/data";
@@ -10,7 +11,7 @@ type Vehiculo = {
   dominio: string; marca: string; modelo: string; anio: string; tipo: string;
   precio: string; km: string; color: string; descripcion: string;
   documentacion_validada: boolean; documentacion_validada_fecha: string | null;
-  vistas_reales: number; consultas_reales: number;
+  vistas_reales: number; consultas_reales: number; fotos: string[];
 };
 type Publicacion = { dominio: string; canal: Canal; estado: string };
 
@@ -20,15 +21,21 @@ function formatoPrecio(p: string) {
 }
 
 export default function StockListadoPage() {
+  const router = useRouter();
   const [stock, setStock] = useState<Vehiculo[]>([]);
   const [publicaciones, setPublicaciones] = useState<Publicacion[]>([]);
   const [vista, setVista] = useState<"tabla" | "cards">("tabla");
   const [filtro, setFiltro] = useState("");
+  // Mismo problema que /catalogo: sin esto, apenas se entra a la página se
+  // ve "Sin resultados" mientras /api/stock todavía está trayendo las fotos
+  // en base64 (puede tardar varios segundos), antes de saber si hay stock o no.
+  const [cargando, setCargando] = useState(true);
 
   async function cargarStock() {
     const res = await fetch("/api/stock");
     const data = await res.json();
     setStock(data.vehiculos || []);
+    setCargando(false);
   }
   useEffect(() => {
     cargarStock();
@@ -87,35 +94,48 @@ export default function StockListadoPage() {
             placeholder="Buscar por dominio, marca o modelo…"
             className="w-full max-w-sm rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
           />
-          <span className="ml-3 shrink-0 text-xs text-zinc-400">{filtrado.length} de {stock.length} vehículo(s)</span>
+          <span className="ml-3 shrink-0 text-xs text-zinc-400">
+            {cargando ? "Cargando…" : `${filtrado.length} de ${stock.length} vehículo(s)`}
+          </span>
         </div>
 
         {vista === "tabla" ? (
           <div className="overflow-auto rounded-xl border border-zinc-200 bg-white shadow-sm">
             <table className="w-full text-sm">
-              <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
+              {/* Antes el encabezado tenía la misma altura visual que una
+                  fila de datos y el mismo gris apagado -no se distinguía de
+                  un renglón más. Ahora es notoriamente más alto, con texto
+                  negro en negrita y un fondo más oscuro que el resto de la
+                  tabla, para que se lea de entrada como encabezado. */}
+              <thead className="bg-zinc-100 text-xs font-bold uppercase tracking-wide text-zinc-900">
                 <tr>
-                  <th className="p-3 text-left">Dominio</th>
-                  <th className="p-3 text-left">Marca / Modelo</th>
-                  <th className="p-3 text-left">Año</th>
-                  <th className="p-3 text-left">Precio</th>
-                  <th className="p-3 text-left">Km</th>
-                  <th className="p-3 text-left">Color</th>
-                  <th className="p-3 text-left">Vistas</th>
-                  <th className="p-3 text-left">Consultas</th>
-                  <th className="p-3 text-left">Canales</th>
-                  <th className="p-3 text-left">Papeles</th>
+                  <th className="h-14 p-3 text-left">Dominio</th>
+                  <th className="h-14 p-3 text-left">Marca / Modelo</th>
+                  <th className="h-14 p-3 text-left">Año</th>
+                  <th className="h-14 p-3 text-left">Precio</th>
+                  <th className="h-14 p-3 text-left">Km</th>
+                  <th className="h-14 p-3 text-left">Color</th>
+                  <th className="h-14 p-3 text-left">Vistas</th>
+                  <th className="h-14 p-3 text-left">Consultas</th>
+                  <th className="h-14 p-3 text-left">Canales</th>
+                  <th className="h-14 p-3 text-left">Papeles</th>
                 </tr>
               </thead>
               <tbody>
                 {filtrado.map((v) => (
-                  <tr key={v.dominio} className="border-t border-zinc-100">
-                    <td className="p-3 font-mono text-xs">
-                      <Link href={`/stock/listado/${encodeURIComponent(v.dominio)}`} className="text-blue-600 hover:underline">{v.dominio}</Link>
-                    </td>
-                    <td className="p-3 font-medium">
-                      <Link href={`/stock/listado/${encodeURIComponent(v.dominio)}`} className="hover:underline">{v.marca} {v.modelo}</Link>
-                    </td>
+                  // Toda la fila navega al detalle -antes solo el texto de
+                  // dominio y marca/modelo eran clickeables, el resto de la
+                  // fila (precio, km, color, vistas...) no reaccionaba a
+                  // nada, aunque parecía una fila de una tabla de gestión
+                  // normal. El botón de "Validar" frena la navegación con
+                  // stopPropagation, porque tiene su propia acción.
+                  <tr
+                    key={v.dominio}
+                    onClick={() => router.push(`/stock/listado/${encodeURIComponent(v.dominio)}`)}
+                    className="cursor-pointer border-t border-zinc-100 transition hover:bg-blue-50/60"
+                  >
+                    <td className="p-3 font-mono text-xs text-blue-600">{v.dominio}</td>
+                    <td className="p-3 font-medium">{v.marca} {v.modelo}</td>
                     <td className="p-3">{v.anio || "—"}</td>
                     <td className="p-3 font-semibold text-emerald-700">{formatoPrecio(v.precio)}</td>
                     <td className="p-3">{v.km || "—"}</td>
@@ -134,7 +154,7 @@ export default function StockListadoPage() {
                     </td>
                     <td className="p-3">
                       <button
-                        onClick={() => toggleDocumentacion(v.dominio, !v.documentacion_validada)}
+                        onClick={(e) => { e.stopPropagation(); toggleDocumentacion(v.dominio, !v.documentacion_validada); }}
                         className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${v.documentacion_validada ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"}`}
                       >
                         {v.documentacion_validada && <CheckCircle2 className="h-3 w-3" strokeWidth={2} />}
@@ -143,7 +163,10 @@ export default function StockListadoPage() {
                     </td>
                   </tr>
                 ))}
-                {filtrado.length === 0 && (
+                {cargando && (
+                  <tr><td colSpan={10} className="p-6 text-center text-sm text-zinc-400">Cargando stock…</td></tr>
+                )}
+                {!cargando && filtrado.length === 0 && (
                   <tr><td colSpan={10} className="p-6 text-center text-sm text-zinc-400">Sin resultados.</td></tr>
                 )}
               </tbody>
@@ -153,8 +176,16 @@ export default function StockListadoPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
             {filtrado.map((v) => (
               <div key={v.dominio} className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                {/* Bug real: esta vista siempre mostraba el placeholder
+                    "(próximamente)" aunque el vehículo ya tuviera fotos
+                    cargadas -nunca leía v.fotos. */}
                 <div className="relative flex h-28 items-center justify-center gap-1.5 bg-zinc-50 text-xs text-zinc-400">
-                  <Camera className="h-4 w-4" strokeWidth={1.75} /> (próximamente)
+                  {v.fotos && v.fotos.length > 0 ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={v.fotos[0]} alt={`${v.marca} ${v.modelo}`} className="h-full w-full object-cover" />
+                  ) : (
+                    <><Camera className="h-4 w-4" strokeWidth={1.75} /> Sin fotos</>
+                  )}
                   {v.documentacion_validada && (
                     <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                       <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} /> Papeles OK
@@ -189,7 +220,8 @@ export default function StockListadoPage() {
                 </div>
               </div>
             ))}
-            {filtrado.length === 0 && <p className="text-sm text-zinc-400">Sin resultados.</p>}
+            {cargando && <p className="text-sm text-zinc-400">Cargando stock…</p>}
+            {!cargando && filtrado.length === 0 && <p className="text-sm text-zinc-400">Sin resultados.</p>}
           </div>
         )}
       </main>

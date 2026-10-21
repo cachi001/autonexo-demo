@@ -14,8 +14,6 @@
 // bajan la imagen de esa URL); la de Facebook sí acepta el archivo subido
 // directo. Acá se usa image_url para los dos, por simplicidad y porque la
 // ruta /api/stock/[dominio]/fotos/[indice] ya la expone igual.
-import { humanizarError } from "@/lib/errores";
-
 const GRAPH_VERSION = "v21.0";
 const GRAPH_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
 const AUTH_URL = "https://www.facebook.com/" + GRAPH_VERSION + "/dialog/oauth";
@@ -149,7 +147,7 @@ export async function publicarEnFacebook(pageId: string, pageAccessToken: string
   });
   const data = await res.json();
   if (!res.ok) {
-    return { ok: false as const, error: humanizarError(data?.error?.message || JSON.stringify(data)) };
+    return { ok: false as const, error: data?.error?.message || JSON.stringify(data) };
   }
   const externalId = (data.post_id || data.id) as string;
   const permalink = await permalinkFacebook(externalId, pageAccessToken);
@@ -188,7 +186,7 @@ export async function publicarEnInstagram(igUserId: string, pageAccessToken: str
   });
   const contenedor = await resContenedor.json();
   if (!resContenedor.ok) {
-    return { ok: false as const, error: humanizarError(contenedor?.error?.message || JSON.stringify(contenedor)) };
+    return { ok: false as const, error: contenedor?.error?.message || JSON.stringify(contenedor) };
   }
   const resPublicar = await fetch(`${GRAPH_URL}/${igUserId}/media_publish`, {
     method: "POST",
@@ -197,7 +195,7 @@ export async function publicarEnInstagram(igUserId: string, pageAccessToken: str
   });
   const publicado = await resPublicar.json();
   if (!resPublicar.ok) {
-    return { ok: false as const, error: humanizarError(publicado?.error?.message || JSON.stringify(publicado)) };
+    return { ok: false as const, error: publicado?.error?.message || JSON.stringify(publicado) };
   }
   const externalId = publicado.id as string;
   const permalink = await permalinkInstagram(externalId, pageAccessToken);
