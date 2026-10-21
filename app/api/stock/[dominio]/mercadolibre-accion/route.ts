@@ -68,7 +68,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
   const resultado = await actualizarItem(previaMl.external_id, conectado.access_token, { status });
 
   if (!resultado.ok) {
-    return NextResponse.json({ error: resultado.error }, { status: 502 });
+    // 422, no 502: mismo criterio que /publicar -un rechazo de negocio con
+    // mensaje claro de Mercado Libre, no una falla real de infraestructura.
+    return NextResponse.json({ error: resultado.error }, { status: 422 });
   }
 
   const nuevoEstado = accion === "pausar" ? "pausado" : accion === "reanudar" ? "publicado" : "sin_publicar";

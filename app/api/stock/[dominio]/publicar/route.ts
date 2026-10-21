@@ -90,7 +90,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
         // cualquier canal).
         const mensaje = "La conexión con Mercado Libre venció y no se pudo renovar, reconectá la cuenta en Conexiones.";
         const pub = await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "error", error_msg: mensaje });
-        return NextResponse.json({ error: mensaje, publicacion: pub }, { status: 502 });
+        // 422, no 502: es un rechazo de negocio con mensaje claro (hace
+        // falta reconectar la cuenta), no una falla real de infraestructura
+        // -un 502 normalmente implica que el gateway/proxy no pudo completar
+        // la petición, que no es el caso acá (testeo end-to-end 2026-10-21, bug 2).
+        return NextResponse.json({ error: mensaje, publicacion: pub }, { status: 422 });
       }
     }
 
@@ -177,7 +181,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
         permalink: resultado.enRevision ? resultado.permalink : undefined,
         error_msg: resultado.error,
       });
-      return NextResponse.json({ error: resultado.error, publicacion: pub }, { status: 502 });
+      // 422: error de negocio bien formado devuelto por Mercado Libre (ver
+      // comentario de arriba) -antes era 502, que sugiere una falla de
+      // gateway/infraestructura real, no un rechazo con motivo claro.
+      return NextResponse.json({ error: resultado.error, publicacion: pub }, { status: 422 });
     }
     const pub = await setPublicacion({
       dominio: vehiculo.dominio,
@@ -212,7 +219,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ dom
 
     if (!resultado.ok) {
       const pub = await setPublicacion({ dominio: vehiculo.dominio, canal, estado: "error", error_msg: resultado.error });
-      return NextResponse.json({ error: resultado.error, publicacion: pub }, { status: 502 });
+      // 422, mismo criterio que Mercado Libre arriba: error de negocio con
+      // mensaje bien formado, no una falla de infraestructura real.
+      return NextResponse.json({ error: resultado.error, publicacion: pub }, { status: 422 });
     }
     const pub = await setPublicacion({
       dominio: vehiculo.dominio,

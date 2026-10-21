@@ -2,10 +2,12 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, AlertTriangle, ClipboardList, FileText, Share2, ExternalLink } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Camera, CheckCircle2, Upload, X, Loader2, ShieldCheck, RefreshCw, AlertTriangle, ClipboardList, FileText, Share2, ExternalLink, Trash2 } from "lucide-react";
 import { categorizarVehiculo, DOCUMENTOS_POR_CATEGORIA, LABEL_CATEGORIA } from "@/lib/documentos";
 import CanalLogo from "@/components/CanalLogo";
 import CanalAccionesMenu from "@/components/CanalAccionesMenu";
+import ConfirmModal from "@/components/ConfirmModal";
 import type { Canal } from "@/lib/data";
 import { humanizarError } from "@/lib/errores";
 import { useToast } from "@/components/Toast";
@@ -74,8 +76,15 @@ function formatoPrecio(p: string) {
 
 export default function DetalleVehiculoPage({ params }: { params: Promise<{ dominio: string }> }) {
   const { dominio } = use(params);
+  const router = useRouter();
   const { mostrar } = useToast();
   const [vehiculo, setVehiculo] = useState<Vehiculo | null>(null);
+  // --- Eliminar vehículo -antes no existía ningún DELETE para el vehículo
+  // en sí, solo para fotos/documentos sueltos (testeo end-to-end 2026-10-21,
+  // bug 5). Bloquea en vez de desactivar en cascada si hay publicaciones
+  // activas -ver lib/data.ts#eliminarVehiculo para la decisión completa. ---
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
   const [fotoActiva, setFotoActiva] = useState(0);
   const [lightboxAbierto, setLightboxAbierto] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
@@ -171,6 +180,25 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
     setAnioEdit(v.anio || "");
   }
   useEffect(() => { cargar(); }, [dominio]);
+
+  async function eliminarVehiculo() {
+    setEliminando(true);
+    try {
+      const res = await fetch(`/api/stock/${encodeURIComponent(dominio)}`, { method: "DELETE" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        mostrar("error", (data && data.error) || "No se pudo eliminar el vehículo. Probá de nuevo.");
+        setConfirmandoEliminar(false);
+        return;
+      }
+      mostrar("exito", "Vehículo eliminado del stock.");
+      router.push("/stock/listado");
+    } catch {
+      mostrar("error", "No se pudo conectar con el servicio. Revisá tu conexión y probá de nuevo.");
+    } finally {
+      setEliminando(false);
+    }
+  }
 
   async function guardarPrecio() {
     setGuardandoPrecio(true);
@@ -302,9 +330,30 @@ export default function DetalleVehiculoPage({ params }: { params: Promise<{ domi
           <span className="text-zinc-300">/</span>
           <Link href="/stock/listado" className="text-sm text-zinc-400 hover:text-zinc-700">Stock</Link>
           <span className="text-zinc-300">/</span>
-          <h1 className="text-base font-semibold tracking-tight">{vehiculo.marca} {vehiculo.modelo}</h1>
+          <h1 className="flex-1 text-base font-semibold tracking-tight">{vehiculo.marca} {vehiculo.modelo}</h1>
+          <button
+            onClick={() => setConfirmandoEliminar(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+            Eliminar vehículo
+          </button>
         </div>
       </header>
+
+      {confirmandoEliminar && (
+        <ConfirmModal
+          titulo="¿Eliminar este vehículo del stock?"
+          mensaje={
+            eliminando
+              ? "Eliminando..."
+              : "Esta acción borra el vehículo y sus datos cargados de forma permanente. Si tiene publicaciones activas en algún canal (Mercado Libre, Facebook o Instagram), primero vas a tener que desactivarlas desde Canales externos."
+          }
+          textoConfirmar={eliminando ? "Eliminando..." : "Eliminar"}
+          onConfirmar={eliminarVehiculo}
+          onCancelar={() => setConfirmandoEliminar(false)}
+        />
+      )}
 
       <main className="mx-auto max-w-4xl space-y-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">

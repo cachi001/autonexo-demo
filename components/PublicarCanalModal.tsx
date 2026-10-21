@@ -5,7 +5,7 @@ import { Camera, Loader2, X, ThumbsUp, MessageCircle, Send, Heart, Bookmark, Ale
 import Link from "next/link";
 import CanalLogo from "@/components/CanalLogo";
 import type { Canal } from "@/lib/data";
-import { TIPOS_MOTO } from "@/lib/moto";
+import { TIPOS_MOTO, esVehiculoMoto } from "@/lib/moto";
 
 // Antes era un panel genérico sin identidad: mismo gris para los tres
 // canales, sin ningún indicio visual de qué red social es, y la "vista
@@ -20,6 +20,12 @@ type Props = {
   canal: Canal;
   vehiculo: VehiculoResumen;
   cargando: boolean;
+  // Error de la última publicación fallida, ya humanizado (lib/errores.ts) —
+  // antes el modal no mostraba nada acá: al fallar "Confirmar y publicar" el
+  // botón volvía a estar disponible sin ningún indicio visible, el único
+  // lugar donde aparecía el mensaje era la tabla de canales, después de
+  // cerrar el modal (testeo end-to-end 2026-10-21, bug 3).
+  error?: string | null;
   onConfirmar: (payload: {
     titulo?: string;
     descripcion?: string;
@@ -67,13 +73,18 @@ function formatoPrecio(p: string) {
   return isNaN(n) ? p : "$" + n.toLocaleString("es-AR");
 }
 
-export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfirmar, onCancelar }: Props) {
+export default function PublicarCanalModal({ canal, vehiculo, cargando, error, onConfirmar, onCancelar }: Props) {
   const esMl = canal === "mercadolibre";
   // Motos piden atributos completamente distintos en Mercado Libre (sin
   // versión/combustible/puertas, con MOTO_TYPE en su lugar) -confirmado en
   // vivo contra /categories/MLA1763/attributes. Se detecta por el tipo ya
   // cargado en el stock, no hace falta pedírselo de nuevo a la agencia.
-  const esMoto = /moto|cuatriciclo/i.test(vehiculo.tipo || "");
+  // Bug real corregido 2026-10-21: antes era /moto|cuatriciclo/i.test(...),
+  // sin límite de palabra -> "automotor" (au-to-MOTO-r) disparaba falso
+  // positivo de moto para un auto común. esVehiculoMoto (lib/moto.ts) usa el
+  // mismo criterio de tokenización por palabra completa que ya tenía
+  // lib/documentos.ts para este mismo problema.
+  const esMoto = esVehiculoMoto(vehiculo.tipo || "");
   const acento = ACENTO[canal];
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -438,6 +449,17 @@ export default function PublicarCanalModal({ canal, vehiculo, cargando, onConfir
             )}
           </div>
         </div>
+
+        {error && (
+          // Regla del proyecto: nunca tooltip nativo ni texto truncado -una
+          // sola línea, con scroll horizontal del propio contenedor si el
+          // mensaje no entra, nunca escondido detrás de un hover.
+          <div className="border-t border-zinc-100 bg-red-50 px-6 py-3">
+            <div className="overflow-x-auto">
+              <p className="whitespace-nowrap text-sm font-medium text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-3 border-t border-zinc-100 bg-zinc-50 px-6 py-4">
           <button onClick={cerrar} className="text-sm font-semibold text-zinc-500 hover:text-zinc-700">

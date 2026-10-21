@@ -523,6 +523,45 @@ export async function actualizarAnio(dominio: string, agenciaId: string, anio: s
   return filas[0] ? filaAVehiculo(filas[0]) : null;
 }
 
+// No existía ningún DELETE para el vehículo en sí (solo para fotos y
+// documentos sueltos) -> el vehículo de prueba ZZZ999 del testeo end-to-end
+// 2026-10-21 no se podía sacar del stock real por este motivo (bug 5).
+//
+// Decisión tomada (más simple de implementar bien que la cascada
+// automática): BLOQUEAR, no desactivar en cascada. Desactivar en cascada
+// significaría, dentro de esta misma operación, llamar de verdad a la API
+// real de Mercado Libre y de Meta (refrescar token si venció, manejar que
+// una de las dos falle y la otra no, etc.) -mucha superficie para un estado
+// a medio terminar justo en la operación más destructiva que tiene la app.
+// Bloquear es una sola lectura local de `publicaciones`, sin tocar ninguna
+// plataforma externa, y empuja a la agencia a usar las acciones de
+// pausar/eliminar que ya existen por canal (con su propio manejo de
+// errores) antes de borrar el vehículo.
+//
+// Se bloquea si CUALQUIER publicación tiene external_id (aviso/post real
+// que todavía existe en la plataforma), no solo "estado = publicado": un
+// aviso "pausado" o "en_revision" en Mercado Libre también sigue existiendo
+// de verdad del otro lado, borrar el vehículo acá lo dejaría huérfano igual.
+export async function eliminarVehiculo(dominio: string, agenciaId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  await asegurarTablas();
+  const vehiculo = await buscarVehiculo(dominio, agenciaId);
+  if (!vehiculo) return { ok: false, error: "No se encontró el vehículo." };
+  const publicaciones = await listarPublicaciones(dominio);
+  const activas = publicaciones.filter((p) => p.external_id);
+  if (activas.length > 0) {
+    const nombres: Record<Canal, string> = { mercadolibre: "Mercado Libre", facebook: "Facebook", instagram: "Instagram" };
+    const lista = activas.map((p) => nombres[p.canal]).join(", ");
+    return {
+      ok: false,
+      error: `Este vehículo tiene publicaciones activas en ${lista}. Desactivalas desde Canales externos antes de eliminar el vehículo.`,
+    };
+  }
+  await sql`DELETE FROM publicaciones WHERE dominio = ${dominio}`;
+  await sql`DELETE FROM leads WHERE dominio = ${dominio}`;
+  await sql`DELETE FROM stock WHERE dominio = ${dominio} AND agencia_id = ${agenciaId}`;
+  return { ok: true };
+}
+
 export async function setFichaTecnica(
   dominio: string,
   agenciaId: string,

@@ -7,17 +7,19 @@ import { useToast } from "@/components/Toast";
 import ConfirmModal from "@/components/ConfirmModal";
 import PublicarCanalModal from "@/components/PublicarCanalModal";
 import type { Canal } from "@/lib/data";
+import { humanizarError } from "@/lib/errores";
 
 // Antes había un botón de texto por acción posible, pegado uno al lado del
 // otro en la tabla de Canales externos, con 2 o 3 acciones por fila (Pausar,
 // Eliminar, Verificar) quedaba desordenado. Ahora es un solo ícono de tres
 // puntos con un menú desplegable, como cualquier tabla de gestión real.
 //
-// Las acciones de pausar/reanudar/eliminar/verificar solo existen para
-// Mercado Libre, porque son las únicas que el backend soporta hoy (ver
-// lib/meta.ts, que solo tiene publicarEnFacebook/publicarEnInstagram, no
-// pausar/eliminar). Facebook e Instagram, por ahora, solo tienen
-// Publicar/Reintentar, igual que en la ficha de cada vehículo.
+// Pausar/reanudar/"Verificar estado real" solo existen para Mercado Libre,
+// porque es la única plataforma con un estado "pausado" reversible real
+// (ver lib/mercadolibre.ts). Facebook e Instagram, desde 2026-10-21, tienen
+// "Eliminar" (lib/meta.ts, DELETE /{id} de Graph API) -no "Pausar", porque
+// Meta no tiene ningún estado intermedio reversible para un post de Página
+// ni para un media de Instagram, solo existir o no existir.
 //
 // El bug más importante que esto corrige: antes, si una acción fallaba
 // (token vencido, error real de la plataforma, lo que sea), el fetch
@@ -33,6 +35,7 @@ type Props = { dominio: string; canal: Canal; estado: string; tieneExternalId: b
 type AccionPendiente =
   | { tipo: "publicar" }
   | { tipo: "ml"; accion: "pausar" | "reanudar" | "eliminar" | "cancelar" }
+  | { tipo: "meta"; accion: "eliminar" }
   | { tipo: "verificar" };
 
 const NOMBRE_CANAL: Record<Canal, string> = { mercadolibre: "Mercado Libre", facebook: "Facebook", instagram: "Instagram" };
@@ -44,6 +47,7 @@ export default function CanalAccionesMenu({ dominio, canal, estado, tieneExterna
   const [cargando, setCargando] = useState(false);
   const [confirmando, setConfirmando] = useState<AccionPendiente | null>(null);
   const [editando, setEditando] = useState(false);
+  const [errorPublicar, setErrorPublicar] = useState<string | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const esMl = canal === "mercadolibre";
 
@@ -77,17 +81,62 @@ export default function CanalAccionesMenu({ dominio, canal, estado, tieneExterna
     }
   }
 
-  async function publicar(payload: { titulo?: string; descripcion?: string; mensaje?: string; fotoIndice?: number }) {
-    const exito = await ejecutar(
+  // No usa el helper genérico `ejecutar`: acá hace falta además dejar el
+  // mensaje de error visible DENTRO del modal (no solo como toast flotante)
+  // para que la agencia lo vea en el momento y lugar donde está mirando -
+  // antes, al fallar "Confirmar y publicar", el modal no mostraba nada y
+  // el único lugar donde aparecía el error era la tabla, después de cerrar
+  // el modal a mano (testeo end-to-end 2026-10-21, bug 3).
+  async function publicar(payload: {
+    titulo?: string;
+    descripcion?: string;
+    mensaje?: string;
+    fotoIndice?: number;
+    listingTypeId?: string;
+    condicion?: "used" | "new";
+    garantiaFabrica?: boolean;
+    garantiaMecanica?: boolean;
+    entregaDomicilio?: boolean;
+    tipoMoto?: string;
+  }) {
+    setCargando(true);
+    setErrorPublicar(null);
+    try {
+      const res = await fetch(`/api/stock/${encodeURIComponent(dominio)}/publicar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canal, ...payload }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const mensajeCrudo = (data && data.error) as string | undefined;
+        const mensaje = mensajeCrudo ? humanizarError(mensajeCrudo).mensaje : "No se pudo completar la publicación. Probá de nuevo.";
+        setErrorPublicar(mensaje);
+        mostrar("error", mensaje);
+        return;
+      }
+      mostrar("exito", `Publicado en ${NOMBRE_CANAL[canal]}.`);
+      setEditando(false);
+      router.refresh();
+    } catch {
+      const mensaje = "No se pudo conectar con el servicio. Revisá tu conexión y probá de nuevo.";
+      setErrorPublicar(mensaje);
+      mostrar("error", mensaje);
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  function accionMeta() {
+    return ejecutar(
       () =>
-        fetch(`/api/stock/${encodeURIComponent(dominio)}/publicar`, {
+        fetch(`/api/stock/${encodeURIComponent(dominio)}/meta-accion`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ canal, ...payload }),
+          body: JSON.stringify({ canal, accion: "eliminar" }),
         }),
-      `Publicado en ${NOMBRE_CANAL[canal]}.`
+      `Publicación eliminada de ${NOMBRE_CANAL[canal]}.`
     );
-    if (exito) setEditando(false);
   }
 
   function accionMl(accion: "pausar" | "reanudar" | "eliminar" | "cancelar") {
@@ -121,10 +170,16 @@ export default function CanalAccionesMenu({ dominio, canal, estado, tieneExterna
       // se publica de verdad con un solo clic sin que la agencia vea qué
       // texto y qué foto se van a usar.
       setAbierto(false);
+      setErrorPublicar(null);
       setEditando(true);
       return;
     }
     if (pendiente.tipo === "ml" && (pendiente.accion === "pausar" || pendiente.accion === "eliminar")) {
+      setAbierto(false);
+      setConfirmando(pendiente);
+      return;
+    }
+    if (pendiente.tipo === "meta" && pendiente.accion === "eliminar") {
       setAbierto(false);
       setConfirmando(pendiente);
       return;
@@ -146,6 +201,12 @@ export default function CanalAccionesMenu({ dominio, canal, estado, tieneExterna
   }
   if (esMl && tieneExternalId && estado !== "sin_publicar") {
     opciones.push({ label: "Verificar estado real", pendiente: { tipo: "verificar" } });
+  }
+  // Facebook/Instagram: sin estado "pausado" real en la plataforma (ver
+  // comentario de arriba), la única acción posible sobre un posteo ya
+  // publicado es eliminarlo.
+  if (!esMl && estado === "publicado" && tieneExternalId) {
+    opciones.push({ label: "Eliminar", pendiente: { tipo: "meta", accion: "eliminar" } });
   }
 
   if (opciones.length === 0) return null;
@@ -191,13 +252,23 @@ export default function CanalAccionesMenu({ dominio, canal, estado, tieneExterna
           onCancelar={() => setConfirmando(null)}
         />
       )}
+      {confirmando && confirmando.tipo === "meta" && confirmando.accion === "eliminar" && (
+        <ConfirmModal
+          titulo="¿Eliminar esta publicación?"
+          mensaje={`Esto borra la publicación real de ${NOMBRE_CANAL[canal]}, de forma permanente. Si querés volver a publicarlo ahí, vas a tener que confirmarlo de nuevo como una publicación nueva.`}
+          textoConfirmar="Eliminar"
+          onConfirmar={accionMeta}
+          onCancelar={() => setConfirmando(null)}
+        />
+      )}
       {editando && (
         <PublicarCanalModal
           canal={canal}
           vehiculo={vehiculo}
           cargando={cargando}
+          error={errorPublicar}
           onConfirmar={publicar}
-          onCancelar={() => setEditando(false)}
+          onCancelar={() => { setEditando(false); setErrorPublicar(null); }}
         />
       )}
     </div>

@@ -24,6 +24,13 @@ const SCOPES = [
   "pages_read_engagement",
   "instagram_basic",
   "instagram_content_publish",
+  // Hace falta para poder borrar un media de Instagram publicado por esta
+  // app (DELETE /{ig-media-id}, confirmado contra la documentación oficial
+  // de Meta) -sin este scope, Graph devuelve error de permiso aunque el
+  // media sea de la propia cuenta. Conexiones hechas ANTES de agregar este
+  // scope (2026-10-21) no lo tienen -si "Eliminar" en Instagram falla con un
+  // error de permiso, hace falta reconectar la cuenta en Conexiones.
+  "instagram_manage_contents",
   "business_management",
 ];
 
@@ -200,4 +207,30 @@ export async function publicarEnInstagram(igUserId: string, pageAccessToken: str
   const externalId = publicado.id as string;
   const permalink = await permalinkInstagram(externalId, pageAccessToken);
   return { ok: true as const, externalId, permalink };
+}
+
+// A diferencia de Mercado Libre, Meta no tiene un estado "pausado"
+// intermedio para un post de Página ni para un media de Instagram -la única
+// acción real posible sobre algo ya publicado es borrarlo, definitivo.
+// Confirmado contra la documentación oficial de Meta: Facebook borra
+// cualquier objeto propio (post o foto) con DELETE /{id} + pages_manage_posts;
+// Instagram borra un media propio con DELETE /{ig-media-id} +
+// instagram_basic + instagram_manage_contents. Ambos devuelven
+// {"success": true} si funcionó.
+export async function eliminarPublicacionFacebook(postId: string, pageAccessToken: string) {
+  const res = await fetch(`${GRAPH_URL}/${postId}?access_token=${pageAccessToken}`, { method: "DELETE" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    return { ok: false as const, error: data?.error?.message || JSON.stringify(data) };
+  }
+  return { ok: true as const };
+}
+
+export async function eliminarPublicacionInstagram(mediaId: string, pageAccessToken: string) {
+  const res = await fetch(`${GRAPH_URL}/${mediaId}?access_token=${pageAccessToken}`, { method: "DELETE" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    return { ok: false as const, error: data?.error?.message || JSON.stringify(data) };
+  }
+  return { ok: true as const };
 }
