@@ -445,21 +445,30 @@ export async function buscarVehiculoPublico(dominio: string): Promise<Vehiculo |
 
 export async function agregarVehiculo(
   v: Omit<Vehiculo, "documentos" | "documentacion_validada" | "documentacion_validada_fecha" | "vistas_reales" | "fotos">
-): Promise<Vehiculo | null> {
+): Promise<{ vehiculo: Vehiculo; error?: undefined } | { vehiculo?: undefined; error: string }> {
   await asegurarTablas();
-  const existente = await sql`SELECT dominio FROM stock WHERE dominio = ${v.dominio}`;
-  if (existente.length > 0) return null;
+  // Bug real encontrado el 2026-10-21: este chequeo no filtraba por
+  // agencia_id -una patente ya cargada por CUALQUIER agencia (no solo la
+  // propia) bloqueaba el alta, y encima fallaba en silencio ("No se pudo
+  // guardar. Revisá los campos.", sin decir por qué). La unicidad real de
+  // una patente es por agencia, no global en toda la plataforma.
+  const existente = await sql`SELECT dominio FROM stock WHERE dominio = ${v.dominio} AND agencia_id = ${v.agencia_id}`;
+  if (existente.length > 0) {
+    return { error: `Ya hay un vehículo cargado con la patente ${v.dominio} en tu stock.` };
+  }
   await sql`
     INSERT INTO stock (dominio, agencia_id, marca, modelo, anio, tipo, precio, km, color, descripcion, chasis, titular_nombre, titular_domicilio, titular_dni, libre_deuda_atm, documentos, documentacion_validada, documentacion_validada_fecha, vistas_reales, fotos)
     VALUES (${v.dominio}, ${v.agencia_id}, ${v.marca}, ${v.modelo}, ${v.anio}, ${v.tipo}, ${v.precio}, ${v.km}, ${v.color}, ${v.descripcion}, ${v.chasis}, ${v.titular_nombre}, ${v.titular_domicilio}, ${v.titular_dni}, ${v.libre_deuda_atm}, '{}'::jsonb, FALSE, NULL, 0, '[]'::jsonb)
   `;
   return {
-    ...v,
-    documentos: {},
-    documentacion_validada: false,
-    documentacion_validada_fecha: null,
-    vistas_reales: 0,
-    fotos: [],
+    vehiculo: {
+      ...v,
+      documentos: {},
+      documentacion_validada: false,
+      documentacion_validada_fecha: null,
+      vistas_reales: 0,
+      fotos: [],
+    },
   };
 }
 

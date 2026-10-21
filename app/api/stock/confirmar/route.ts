@@ -7,9 +7,10 @@ export async function POST(req: NextRequest) {
   if (!agencia) return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   const body = (await req.json()) as { filas: FilaValidada[] };
   const agregados = [];
+  const errores: string[] = [];
   for (const f of body.filas) {
     if (!f.valida) continue;
-    const v = await agregarVehiculo({
+    const resultado = await agregarVehiculo({
       dominio: f.datos.dominio,
       agencia_id: agencia.id,
       marca: f.datos.marca,
@@ -29,7 +30,17 @@ export async function POST(req: NextRequest) {
       titular_dni: f.datos.titular_dni || "",
       libre_deuda_atm: f.datos.libre_deuda_atm || "",
     });
-    if (v) agregados.push(v);
+    if (resultado.vehiculo) agregados.push(resultado.vehiculo);
+    else errores.push(resultado.error);
   }
-  return NextResponse.json({ agregados, cantidad: agregados.length });
+  // "error" solo cuando NINGUNA fila se guardó -con una planilla de varias
+  // filas, puede haber una patente repetida y el resto cargarse bien, eso no
+  // es un fracaso total (antes "No se pudo guardar. Revisá los campos." no
+  // decía nada de esto, encontrado en vivo 2026-10-21).
+  return NextResponse.json({
+    agregados,
+    cantidad: agregados.length,
+    error: agregados.length === 0 ? errores[0] : undefined,
+    errores: errores.length ? errores : undefined,
+  });
 }
